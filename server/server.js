@@ -10,6 +10,11 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const { createCommunityRouter, defaultModels } = require("./routes/community");
 
+const authRoutes = require('./routes/authRoutes');
+const { loadUser, requireAuth } = require('./middleware/authentication');
+const User = require('./models/User');
+const AuthSession = require('./models/AuthSession');
+
 const app = express();
 
 app.use(cors({
@@ -17,7 +22,11 @@ app.use(cors({
   credentials: true
 }));
 
-// Person 5: verified authentication middleware must run before this router.
+// Restore verified account identity before auth and Community endpoints.
+app.use('/api', loadUser);
+app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
+// Every application API below this point requires a verified account.
+app.use('/api', requireAuth);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
 app.use(express.json());
 
@@ -43,14 +52,14 @@ async function startServer() {
       throw new Error('Local demo mode cannot run in production.');
     }
     await connectDB();
-    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init()]);
+    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init()]);
 
     const port = process.env.PORT || 3000;
 
     const host = process.env.COMMUNITY_DEMO_MODE === 'true' ? '127.0.0.1' : undefined;
     app.listen(port, host, () => {
       console.log(`Backend running at http://localhost:${port}`);
-      if (process.env.COMMUNITY_DEMO_MODE === 'true') console.log('Community: local test customer enabled; real login is not connected yet.');
+      if (process.env.COMMUNITY_DEMO_MODE === 'true') console.log('Community demo mode is configured, but protected API access still requires login.');
     });
   } catch (error) {
     console.error(`Backend startup failed: ${error.name}`);

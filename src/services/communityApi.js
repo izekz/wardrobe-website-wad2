@@ -1,3 +1,4 @@
+import { authState } from './authService'
 export const categories = ['Tops', 'Bottoms', 'Jackets', 'Dresses', 'Shoes', 'Accessories']
 export const styles = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy']
 export const conditions = ['New', 'Like new', 'Good', 'Fair']
@@ -13,6 +14,10 @@ export async function communityApi(path, options = {}) {
       signal: controller.signal,
     })
     const body = await response.json().catch(() => null)
+    if (response.status === 401) {
+      authState.user = null
+      window.dispatchEvent(new Event('auth:expired'))
+    }
     if (!response.ok) throw new Error(body?.message || 'The server could not complete your request.')
     if (!body) throw new Error('The server returned an unexpected response.')
     return body
