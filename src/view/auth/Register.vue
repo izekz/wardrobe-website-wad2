@@ -21,7 +21,7 @@ async function submit() {
 </script>
 <template>
   <section class="registration-page">
-    <header class="registration-header"><RouterLink to="/login" class="registration-brand">Wardrobe <span aria-hidden="true">✿</span></RouterLink><span>Already a member? <RouterLink to="/login">Log in</RouterLink></span></header>
+    <header class="registration-header"><RouterLink to="/login" class="registration-brand">Dripped <span aria-hidden="true">✿</span></RouterLink><span>Already a member? <RouterLink to="/login">Log in</RouterLink></span></header>
     <div class="registration-layout">
       <aside class="registration-story"><h1>Find your<br>kind of style.</h1><p>Pre-loved, new and unique fashion<br>from your university community.</p><img src="../../assets/images/register-style.png" alt="A relaxed everyday look in soft lilac and cream" /><CommunityFloral class="registration-flower" aria-hidden="true" /></aside>
       <div class="registration-card">

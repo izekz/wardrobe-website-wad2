@@ -28,10 +28,10 @@ async function submit() {
   <section class="auth-login">
 
     <div class="login-visual">
-      <RouterLink to="/community" class="login-brand">Wardrobe <span aria-hidden="true">✿</span></RouterLink>
+      <RouterLink to="/community" class="login-brand">Dripped <span aria-hidden="true">✿</span></RouterLink>
       <div class="login-visual-heading"><h1>Welcome back<br>to your wardrobe.</h1><span class="login-stroke" aria-hidden="true"></span></div>
     </div>
-    
+
     <div class="login-side">
       <div class="login-toplink">New here? <RouterLink v-if="registrationRoute" :to="{ name: 'register' }">Create account</RouterLink><span v-else>Registration coming soon</span></div>
       <CommunityFloral class="login-flower login-flower-top" aria-hidden="true" />
