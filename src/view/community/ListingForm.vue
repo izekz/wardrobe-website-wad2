@@ -1,5 +1,9 @@
 <script>
+import { communityApi } from '../../services/communityApi'
+import CommunityTabs from '../../components/CommunityTabs.vue'
+import CommunityIcon from '../../components/CommunityIcon.vue'
 export default {
+  components: { CommunityTabs, CommunityIcon },
   data() {
     return {
       // v-model connects the fields below to these values.
@@ -13,14 +17,23 @@ export default {
       photoUrl: '',
       error: '',
       preview: null,
+      photoData: '',
+      photoLoading: false,
+      photoVersion: 0,
+      posting: false,
+      saved: null,
+      clientRequestId: crypto.randomUUID(),
     }
   },
 
   methods: {
-    selectPhoto(event) {
+    async selectPhoto(event) {
       const file = event.target.files[0]
+      const version = ++this.photoVersion
       this.error = ''
       this.preview = null
+      this.photoData = ''
+      this.photoLoading = false
       if (this.photoUrl) URL.revokeObjectURL(this.photoUrl)
       this.photoUrl = ''
       if (!file) return
@@ -32,11 +45,23 @@ export default {
         return
       }
 
-      // This shows a local image; it does not upload or save the photo.
+      // The object URL is only for the preview; FileReader prepares the upload.
       this.photoUrl = URL.createObjectURL(file)
+      this.photoLoading = true
+      try {
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = () => reject(new Error('The photo could not be read. Please choose it again.'))
+          reader.readAsDataURL(file)
+        })
+        if (version === this.photoVersion) this.photoData = data
+      } catch (error) { if (version === this.photoVersion) this.error = error.message }
+      finally { if (version === this.photoVersion) this.photoLoading = false }
     },
 
     previewListing() {
+      if (!this.$refs.listingForm.reportValidity()) return
       const enteredPrice = this.form.listingType === 'rent'
         ? this.form.rentalPrice : this.form.price
       const amount = Number(enteredPrice)
@@ -49,28 +74,67 @@ export default {
       }
 
       this.error = ''
-      // Step 1: copy the entered values into a preview card.
-      // Step 2 will send the listing and photo to the backend for saving.
+      // Previewing still does not save anything. Post listing sends the data.
       this.preview = { ...this.form, amount, imageURL: this.photoUrl }
+    },
+    markChanged(event) {
+      this.preview = null
+      if (event?.target?.type !== 'file') this.error = ''
+      this.clientRequestId = crypto.randomUUID()
+    },
+    async postListing() {
+      if (this.posting || this.photoLoading) return
+      this.previewListing()
+      if (!this.preview) return
+      if (!this.photoData) { this.error = 'Choose a readable photo before posting.'; return }
+      this.posting = true
+      this.error = ''
+      try {
+        const result = await communityApi('/listings', {
+          method: 'POST',
+          body: JSON.stringify({ ...this.form, photo: this.photoData, clientRequestId: this.clientRequestId }),
+        })
+        this.saved = result.listing
+        this.preview = null
+        this.$nextTick(() => this.$refs.savedHeading?.focus())
+      } catch (error) { this.error = error.message }
+      finally { this.posting = false }
+    },
+    startAnother() {
+      if (this.photoUrl) URL.revokeObjectURL(this.photoUrl)
+      this.form = { name: '', category: '', style: '', size: '', condition: '', listingType: 'sell', price: '', rentalPrice: '', description: '' }
+      this.photoUrl = ''; this.photoData = ''; this.preview = null; this.saved = null
+      this.error = ''; this.clientRequestId = crypto.randomUUID()
     },
   },
 
   beforeUnmount() {
+    this.photoVersion++
     if (this.photoUrl) URL.revokeObjectURL(this.photoUrl)
   },
 }
 </script>
 
 <template>
-  <section aria-labelledby="listing-heading">
+  <section class="listing-form-page" aria-labelledby="listing-heading">
+    <CommunityTabs />
     <div class="heading mb-4">
-      <span class="flower" aria-hidden="true">✿</span>
-      <p class="eyebrow mb-2">COMMUNITY / CREATE LISTING</p>
+      <p class="eyebrow mb-2">A SECOND CHAPTER STARTS HERE</p>
       <h1 id="listing-heading">Create a listing</h1>
       <p class="mb-0">Sell or rent a piece from your wardrobe.</p>
     </div>
 
-    <form @submit.prevent="previewListing" @input="preview = null" @change="preview = null">
+    <section v-if="saved" class="panel" aria-live="polite">
+      <h2 ref="savedHeading" tabindex="-1">Your listing is posted</h2>
+      <p>{{ saved.name }} has been saved. It is ready to view in the marketplace.</p>
+      <div class="d-flex flex-wrap gap-2">
+        <RouterLink :to="{ name: 'community-listing', params: { listingId: saved.listingId } }" class="community-btn">View listing</RouterLink>
+        <RouterLink :to="{ name: 'community-marketplace' }" class="community-btn community-btn-outline">Go to marketplace</RouterLink>
+        <button type="button" class="btn btn-link" @click="startAnother">Post another item</button>
+      </div>
+    </section>
+    <form v-else ref="listingForm" @submit.prevent="postListing" @input="markChanged" @change="markChanged" :aria-busy="posting">
+      <fieldset :disabled="posting" class="border-0 p-0 m-0">
       <div class="row g-4">
         <div class="col-lg-5">
           <section class="panel h-100" aria-labelledby="photo-heading">
@@ -78,7 +142,7 @@ export default {
             <div class="photo-area mb-3">
               <img v-if="photoUrl" :src="photoUrl" alt="Selected clothing photo" />
               <div v-else class="text-center p-4">
-                <span class="photo-symbol" aria-hidden="true">＋</span>
+                <CommunityIcon name="upload" :size="38" class="photo-symbol" />
                 <p class="mb-0">Your clothing photo will appear here</p>
               </div>
             </div>
@@ -146,12 +210,12 @@ export default {
             <div v-if="form.listingType === 'sell'" class="mb-3">
               <label for="sale-price" class="form-label">Price (S$)</label>
               <input id="sale-price" v-model.number="form.price" type="number"
-                class="form-control" min="0" step="0.01" required placeholder="25.00" />
+                class="form-control" min="0" max="100000" step="0.01" required placeholder="25.00" />
             </div>
             <div v-else class="mb-3">
               <label for="rental-price" class="form-label">Rental price (S$ per day)</label>
               <input id="rental-price" v-model.number="form.rentalPrice" type="number"
-                class="form-control" min="0" step="0.01" required placeholder="8.00" />
+                class="form-control" min="0" max="100000" step="0.01" required placeholder="8.00" />
             </div>
 
             <div class="mb-4">
@@ -162,12 +226,14 @@ export default {
             </div>
 
             <p v-if="error" class="alert alert-danger" role="alert">{{ error }}</p>
-            <div class="text-sm-end">
-              <button type="submit" class="btn btn-plum px-4">Preview listing</button>
+            <div class="d-flex flex-wrap justify-content-sm-end gap-2">
+              <button type="button" class="community-btn community-btn-outline" :disabled="photoLoading" @click="previewListing">Preview listing</button>
+              <button type="submit" class="community-btn" :disabled="posting || photoLoading">{{ posting ? 'Posting…' : photoLoading ? 'Reading photo…' : 'Post listing' }} <CommunityIcon name="arrow" :size="19" /></button>
             </div>
           </section>
         </div>
       </div>
+      </fieldset>
     </form>
 
     <section v-if="preview" class="panel mt-4" aria-labelledby="preview-heading" aria-live="polite">
@@ -190,23 +256,20 @@ export default {
 </template>
 
 <style scoped>
-.heading { position: relative; padding: 26px; background: #f8e9ed; border-radius: 16px; }
-.heading h1 { font: 500 clamp(2rem, 5vw, 3rem) Georgia, serif; }
-.eyebrow { font-size: .7rem; letter-spacing: .1em; color: #705180; }
-.flower { float: right; font-size: 3rem; line-height: 1; color: #ac86b2; }
-.panel { padding: 24px; background: white; border: 1px solid #e5dfe5; border-radius: 14px; }
-.photo-area { aspect-ratio: 1; display: grid; place-items: center; background: #f3e9ec; border-radius: 10px; overflow: hidden; }
+.heading { padding: 24px 0 8px; text-align: center; }
+.heading h1 { font-size: clamp(2.4rem, 4.5vw, 3.9rem); }
+.heading > p:last-child { font-size: 1.1rem; color: #736674; }
+.eyebrow { font-size: .68rem; letter-spacing: .14em; color: #986d81; }
+.panel { padding: 28px; background: #fffdfa; border: 1px solid #e8dfe1; border-radius: 16px; }
+.panel h2 { font-family: Georgia, serif; font-size: 1.6rem; }
+.photo-area { aspect-ratio: 1; display: grid; place-items: center; background: #faeee7; border: 1px dashed #dbc8c5; border-radius: 12px; overflow: hidden; }
 .photo-area img { width: 100%; height: 100%; object-fit: contain; }
-.photo-symbol { font-size: 3rem; color: #705180; }
-.photo-tip { padding: 14px; background: #fff4ce; border-radius: 8px; font-size: .9rem; }
-.form-label { font-weight: 500; }
-.form-control, .form-select { border-color: #d6ccd8; min-width: 0; }
-.form-control:focus, .form-select:focus { border-color: #705180; box-shadow: 0 0 0 .2rem #70518022; }
-.form-check-input:checked { background-color: #705180; border-color: #705180; }
-.btn-plum { background: #705180; color: white; }
-.btn-plum:hover, .btn-plum:focus-visible { background: #583d67; color: white; }
-.listing-badge { display: inline-block; padding: 4px 10px; background: #eee5f5; border-radius: 999px; font-size: .8rem; }
-.preview-photo { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; background: #fcfaf5; }
+.photo-symbol { margin-bottom: 20px; color: #825c73; }
+.photo-tip { padding: 15px; background: #fff3d2; border-radius: 8px; font-size: .85rem; color: #7b6758; }
+.form-control, .form-select { min-width: 0; }
+.form-check-input:checked { background-color: #694463; border-color: #694463; }
+.listing-badge { display: inline-block; padding: 5px 12px; background: #f9e0eb; color: #522747; border-radius: 999px; font-size: .8rem; }
+.preview-photo { width: 100%; max-height: 200px; object-fit: contain; border-radius: 10px; background: #f8f0e9; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (max-width: 575px) { .panel, .heading { padding: 18px; } }
+@media (max-width: 575px) { .panel { padding: 20px; } .heading { padding-top: 18px; } }
 </style>
