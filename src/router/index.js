@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import communityRoutes from './communityRoutes'
+import wardrobeRoutes from './wardrobeRoutes'
 import authRoutes from './authRoutes'
 import businessRoutes from './businessRoutes'
 import surveyRoutes from './surveyRoutes'
@@ -17,6 +18,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/login' },
     ...communityRoutes,
+    ...wardrobeRoutes,
     ...authRoutes,
     ...businessRoutes,
     ...surveyRoutes,

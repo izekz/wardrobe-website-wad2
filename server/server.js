@@ -13,6 +13,9 @@ const { createCommunityRouter, defaultModels } = require("./routes/community");
 const { createBusinessRouter, createCatalogRouter, defaultModels: businessModels } = require("./routes/business");
 
 const authRoutes = require('./routes/authRoutes');
+const { createWardrobeRouter } = require('./routes/wardrobeRoutes');
+const WardrobeItem = require('./models/WardrobeItem');
+const SavedOutfit = require('./models/SavedOutfit');
 const surveyRoutes = require('./routes/surveyRoutes');
 const { loadUser, requireAuth } = require('./middleware/authentication');
 const User = require('./models/User');
@@ -30,6 +33,7 @@ app.use('/api', loadUser);
 app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
 // Every application API below this point requires a verified account.
 app.use('/api', requireAuth);
+app.use('/api/wardrobe', express.json({ limit: '8mb' }), createWardrobeRouter());
 app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
 app.use("/api/business", express.json({ limit: "8mb" }), createBusinessRouter());
@@ -58,7 +62,7 @@ async function startServer() {
       throw new Error('Local demo mode cannot run in production.');
     }
     await connectDB();
-    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
+    await Promise.all([WardrobeItem.init(), SavedOutfit.init(), defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
       businessModels.Business.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init()]);
 
     const port = process.env.PORT || 3000;
