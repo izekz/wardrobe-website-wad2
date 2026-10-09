@@ -14,9 +14,10 @@ async function submit() {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
   try {
-    await login(email.value, password.value, remember.value)
+    const user = await login(email.value, password.value, remember.value)
     password.value = ''
-    await router.push({ name: 'community-marketplace' })
+    if (user.role === 'consumer' && !user.surveyCompleted) await router.push({ name: 'style-survey' })
+    else await router.push({ name: 'community-marketplace' })
   } catch (err) { error.value = err.message }
   finally { busy.value = false }
 }
@@ -28,7 +29,7 @@ async function submit() {
   <section class="auth-login">
 
     <div class="login-visual">
-      <RouterLink to="/community" class="login-brand">Dripped <span aria-hidden="true">✿</span></RouterLink>
+      <RouterLink to="/community" class="login-brand">Wardrobe <span aria-hidden="true">✿</span></RouterLink>
       <div class="login-visual-heading"><h1>Welcome back<br>to your wardrobe.</h1><span class="login-stroke" aria-hidden="true"></span></div>
     </div>
 

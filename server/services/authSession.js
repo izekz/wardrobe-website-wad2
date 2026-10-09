@@ -2,7 +2,7 @@ const { createHash, randomBytes } = require('node:crypto');
 const Session = require('../models/AuthSession');
 const COOKIE = 'wardrobe_session';
 const digest = token => createHash('sha256').update(token).digest('hex');
-function publicUser(user) { return { id: String(user._id), name: user.name, email: user.email, role: user.role }; }
+function publicUser(user) { return { id: String(user._id), name: user.name, email: user.email, role: user.role, surveyCompleted: user.surveyCompleted === true, preferredStyles: user.preferredStyles || [], activities: user.activities || [], budget: user.budget || 40 }; }
 function readToken(req) {
   const pair = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(`${COOKIE}=`));
   const token = pair?.slice(COOKIE.length + 1);

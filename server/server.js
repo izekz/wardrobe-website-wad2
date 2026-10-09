@@ -11,6 +11,7 @@ const connectDB = require("./config/db");
 const { createCommunityRouter, defaultModels } = require("./routes/community");
 
 const authRoutes = require('./routes/authRoutes');
+const surveyRoutes = require('./routes/surveyRoutes');
 const { loadUser, requireAuth } = require('./middleware/authentication');
 const User = require('./models/User');
 const AuthSession = require('./models/AuthSession');
@@ -27,6 +28,7 @@ app.use('/api', loadUser);
 app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
 // Every application API below this point requires a verified account.
 app.use('/api', requireAuth);
+app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
 app.use(express.json());
 
