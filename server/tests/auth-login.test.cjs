@@ -40,7 +40,8 @@ test('login, session restoration, expiry, logout and rejected requests', async t
       const r = await post('/api/auth/login', { email: ' ALEX@EXAMPLE.TEST ', password: 'long-test-password', remember: true });
       assert.equal(r.status, 200);
       const body = await r.json(); assert.equal(body.user.name, 'Alex'); assert.equal(body.user.passwordHash, undefined);
-      const header = r.headers.get('set-cookie'); assert.match(header, /HttpOnly/i); assert.match(header, /SameSite=Lax/i); assert.match(header, /Max-Age=/i);
+      const header = r.headers.get('set-cookie'); assert.match(header, /HttpOnly/i); assert.match(header, /SameSite=Lax/i); assert.match(header, /Max-Age=2592000/i);
+      assert.ok(Math.abs(sessions[0].expiresAt.getTime() - Date.now() - 30 * 24 * 60 * 60 * 1000) < 5000);
       cookie = header.split(';')[0]; assert.notEqual(sessions[0].tokenHash, cookie.split('=')[1]);
       const restored = await fetch(url + '/identity', { headers: { Cookie: cookie } }); assert.equal((await restored.json()).user.role, 'consumer');
     });
@@ -54,7 +55,9 @@ test('login, session restoration, expiry, logout and rejected requests', async t
     });
     await t.test('logout invalidates the session; unchecked remember has no persistent cookie', async () => {
       const r = await post('/api/auth/login', { email: user.email, password: 'long-test-password', remember: false }, cookie);
-      assert.equal(r.status, 200); const header = r.headers.get('set-cookie'); assert.doesNotMatch(header, /Max-Age=/i); cookie = header.split(';')[0];
+      assert.equal(r.status, 200); const header = r.headers.get('set-cookie'); assert.doesNotMatch(header, /Max-Age=|Expires=/i);
+      assert.ok(Math.abs(sessions.at(-1).expiresAt.getTime() - Date.now() - 12 * 60 * 60 * 1000) < 5000);
+      cookie = header.split(';')[0];
       assert.equal((await post('/api/auth/logout', {}, cookie)).status, 200);
       const session = await fetch(url + '/api/auth/session', { headers: { Cookie: cookie } }); assert.equal((await session.json()).user, null);
     });

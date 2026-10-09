@@ -72,12 +72,33 @@ test('frontend guard only allows login and registration without a session', asyn
   const guestGuard = createAuthGuard(async () => { calls++; return null; });
   assert.equal(await guestGuard({ path: '/login', meta: { public: true } }), true);
   assert.equal(await guestGuard({ path: '/register', meta: { public: true } }), true);
-  assert.equal(calls, 0);
+  assert.equal(calls, 2);
   assert.deepEqual(await guestGuard({ path: '/community', meta: {} }), { name: 'login', replace: true });
   assert.deepEqual(await guestGuard({ path: '/future-page', meta: {} }), { name: 'login', replace: true });
   assert.equal(await createAuthGuard(async () => ({ id: 'user' }))({ meta: {} }), true);
   let failure;
   const unavailable = createAuthGuard(async () => { throw new Error('Server unavailable'); }, error => { failure = error.message; });
   assert.deepEqual(await unavailable({ meta: {} }), { name: 'login', replace: true });
+  assert.equal(failure, 'Server unavailable');
+});
+
+
+test('returning sessions skip login and registration with the correct destination', async () => {
+  const { createAuthGuard } = await import('../../src/router/routeAccess.mjs');
+  for (const [user, destination] of [
+    [{ role: 'consumer', surveyCompleted: true }, 'discover'],
+    [{ role: 'consumer', surveyCompleted: false }, 'style-survey'],
+    [{ role: 'business' }, 'business-dashboard'],
+  ]) {
+    const guard = createAuthGuard(async () => user);
+    for (const name of ['login', 'register']) {
+      assert.deepEqual(await guard({ name, meta: { public: true, authLayout: true } }),
+        { name: destination, replace: true });
+    }
+  }
+  let failure;
+  const guard = createAuthGuard(async () => { throw new Error('Server unavailable'); },
+    error => { failure = error.message; });
+  assert.equal(await guard({ name: 'login', meta: { public: true, authLayout: true } }), true);
   assert.equal(failure, 'Server unavailable');
 });
