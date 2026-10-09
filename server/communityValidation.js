@@ -85,4 +85,4 @@ function outfitRequestInput(body = {}) {
     clientRequestId: requestKey(body.clientRequestId)
   };
 }
-module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, badRequest, listingInput, outfitRequestInput, singaporeToday };
+module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, badRequest, listingInput, outfitRequestInput, singaporeToday, photo, money, text, choice };

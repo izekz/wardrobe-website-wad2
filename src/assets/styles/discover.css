@@ -1,0 +1,62 @@
+/* Main Discover page and product page. Uses the shared community.css colours. */
+.disc-hero { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 20px; padding: 36px 0 22px; }
+.disc-hero h1 { margin: 0 0 8px; }
+.disc-hero p { margin: 0; color: #4f4452; font-size: clamp(16px, 1.4vw, 20px); }
+.disc-prefs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.disc-prefs .community-tag { font-size: 13px; }
+.disc-survey-card { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-radius: 14px; background: #ffe6db; max-width: 460px; }
+.disc-survey-card strong { display: block; font-family: Georgia, serif; font-size: 20px; font-weight: 500; color: var(--plum); }
+.disc-survey-card span { font-size: 14px; color: #6f5560; }
+.disc-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; margin-bottom: 22px; }
+.disc-toolbar .community-search { flex: 1 1 300px; }
+.disc-toolbar .community-select-wrap { min-width: 130px; }
+.disc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+.disc-card { position: relative; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e9e0e1; border-radius: 16px; background: #fffdfa; transition: border-color .15s, box-shadow .15s; }
+.disc-card:hover { border-color: #bea0b2; box-shadow: 0 8px 22px #5a364b10; }
+.disc-card > a { color: var(--ink) !important; display: block; }
+.disc-card-image { position: relative; background: #f4e9e0; }
+.disc-card-image img { display: block; width: 100%; aspect-ratio: .95; object-fit: cover; }
+.disc-card-label { position: absolute; top: 12px; left: 12px; font-weight: 600; font-size: 11px; letter-spacing: .04em; }
+.disc-heart { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #fffdfaee; color: #6b3a55; box-shadow: 0 2px 8px #0001; }
+.disc-heart.saved { color: #d0496f; }
+.disc-card-body { padding: 14px 18px 18px; }
+.disc-store { font-size: 12px; color: #8c7b8b; margin: 0 0 3px; }
+.disc-card h2 { font-family: inherit; font-size: 16px; font-weight: 500; letter-spacing: 0; line-height: 1.35; margin: 0 0 4px; color: var(--ink); overflow-wrap: anywhere; }
+.disc-price { font-size: 20px; font-weight: 650; color: #592644; margin: 0 0 10px; }
+.disc-reason { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #37613d; background: #eaf5e9; border-radius: 999px; padding: 5px 11px; }
+.disc-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.disc-card-tags .community-tag { font-size: 11px; padding: 5px 10px; }
+.disc-breadcrumb { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #6f6372; margin: 26px 0 20px; }
+.disc-breadcrumb a { color: #6f6372 !important; }
+.disc-detail { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 46px; align-items: start; }
+.disc-detail-photo { width: 100%; aspect-ratio: .8; max-height: 720px; object-fit: cover; border-radius: 16px; background: #f2e8df; }
+.disc-detail h1 { margin: 6px 0 6px; font-size: clamp(2.2rem, 3.6vw, 3.3rem); }
+.disc-detail-price { font-size: 26px; font-weight: 700; color: #3a2238; margin-bottom: 14px; }
+.disc-store-link { font-size: 14px; text-decoration: underline !important; text-underline-offset: 3px; }
+.disc-detail-desc { font-size: 17px; line-height: 1.55; color: #4a3f4c; padding-bottom: 20px; border-bottom: 1px solid var(--line); white-space: pre-wrap; }
+.disc-sizes { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 22px; }
+.disc-sizes button { min-width: 62px; height: 46px; padding: 0 14px; border: 1px solid #ddd1d8; border-radius: 9px; background: #fffefd; color: var(--ink); font-size: 15px; }
+.disc-sizes button.selected { background: #5c3653; border-color: #5c3653; color: #fff; }
+.disc-actions { display: grid; gap: 12px; }
+.disc-actions .community-btn { width: 100%; min-height: 54px; font-size: 16px; font-weight: 600; }
+.disc-why { margin-top: 24px; padding: 22px 24px; border-radius: 14px; background: #fbe6ea; }
+.disc-why h2 { display: flex; align-items: center; gap: 10px; font-size: 1.6rem; margin: 0 0 14px; }
+.disc-why ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.disc-why li { display: flex; align-items: center; gap: 14px; font-size: 16px; }
+.disc-why li span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #f8d3d9; color: #8b3a55; flex: 0 0 auto; }
+.disc-skip-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 15px; }
+.disc-skip-row button { border: 0; background: none; color: var(--plum); padding: 0; }
+.disc-skip-row .link { text-decoration: underline; text-underline-offset: 3px; }
+.disc-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: #2a1a2a59; }
+.disc-modal { width: min(480px, 100%); padding: 28px; border-radius: 18px; background: #fffdfa; box-shadow: 0 20px 60px #2a1a2a33; }
+.disc-modal h2 { margin: 0 0 6px; font-size: 1.9rem; }
+.disc-modal p { color: #6f6372; margin-bottom: 18px; }
+.disc-reasons { display: grid; gap: 10px; margin-bottom: 20px; }
+.disc-reasons label { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid #e3d8de; border-radius: 12px; cursor: pointer; }
+.disc-reasons label:has(input:checked) { border-color: #5c3653; background: #f6eff4; }
+.disc-reasons input { accent-color: #5c3653; width: 18px; height: 18px; }
+.disc-modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.disc-toast { position: fixed; left: 50%; bottom: 24px; z-index: 60; transform: translateX(-50%); padding: 12px 20px; border-radius: 12px; background: #3a2238; color: #fff; font-size: 14px; }
+@media (max-width: 1100px) { .disc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .disc-detail { grid-template-columns: 1fr; gap: 24px; } }
+@media (max-width: 760px) { .disc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .disc-card-body { padding: 12px; } .disc-toolbar .community-select-wrap { flex: 1 1 140px; } }

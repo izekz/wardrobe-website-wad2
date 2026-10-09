@@ -9,8 +9,11 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const { createCommunityRouter, defaultModels } = require("./routes/community");
+// Person 4: business portal + store product catalogue.
+const { createBusinessRouter, createCatalogRouter, defaultModels: businessModels } = require("./routes/business");
 
 const authRoutes = require('./routes/authRoutes');
+const surveyRoutes = require('./routes/surveyRoutes');
 const { loadUser, requireAuth } = require('./middleware/authentication');
 const User = require('./models/User');
 const AuthSession = require('./models/AuthSession');
@@ -27,7 +30,10 @@ app.use('/api', loadUser);
 app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
 // Every application API below this point requires a verified account.
 app.use('/api', requireAuth);
+app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
+app.use("/api/business", express.json({ limit: "8mb" }), createBusinessRouter());
+app.use("/api/catalog", express.json({ limit: "16kb" }), createCatalogRouter());
 app.use(express.json());
 
 app.get("/api/health", async (req, res) => {
@@ -52,7 +58,8 @@ async function startServer() {
       throw new Error('Local demo mode cannot run in production.');
     }
     await connectDB();
-    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init()]);
+    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
+      businessModels.Business.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init()]);
 
     const port = process.env.PORT || 3000;
 

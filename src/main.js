@@ -4,5 +4,6 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/community.css'
+import './assets/styles/business.css'
 
 createApp(App).use(router).mount('#app')

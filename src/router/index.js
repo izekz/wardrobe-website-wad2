@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import communityRoutes from './communityRoutes'
 import authRoutes from './authRoutes'
+import businessRoutes from './businessRoutes'
+import surveyRoutes from './surveyRoutes'
+import discoverRoutes from './discoverRoutes'
 import { authState, restoreSession } from '../services/authService'
 import { createAuthGuard } from './routeAccess.mjs'
 
@@ -15,6 +18,9 @@ const router = createRouter({
     { path: '/', redirect: '/login' },
     ...communityRoutes,
     ...authRoutes,
+    ...businessRoutes,
+    ...surveyRoutes,
+    ...discoverRoutes,
     { path: '/:pathMatch(.*)*', redirect: '/login' },
   ],
   scrollBehavior() { return { top: 0 } },
