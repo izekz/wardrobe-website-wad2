@@ -1,0 +1,200 @@
+{
+  "baseline": "wardrobe-website-wad2(8).zip",
+  "files": [
+    {
+      "path": "server/communityValidation.js",
+      "before": "3734de7f9b08f0db6a9fd506429f4606663076114df28c7ba34132d7d697c68e",
+      "after": "705bcfed3ab6c87b3e706dfffb03d2fd90c7fe2e10ae71709bdb8c46fd4bfc77"
+    },
+    {
+      "path": "server/controllers/businessController.js",
+      "before": "f79fafb85ae4efaa26d3a121260fc8ccc713ac058901686ef1d476d48b0d78fe",
+      "after": "c3eccc0d3fc56dac1e519f428f44721b96943b7616bb92ad189419c06d4bd3ff"
+    },
+    {
+      "path": "server/controllers/communityController.js",
+      "before": "40aad98a84b7894ad3d1050e89fe9f6d77dfe3f319696b061c0ed619ea42bf9d",
+      "after": "872cef4f806d2d8f014c1f95caf0e0adb5112615b3eb3be56fde582867156305"
+    },
+    {
+      "path": "server/controllers/requestCommerceController.js",
+      "before": null,
+      "after": "13770faa126abc31c67fdba1448e3760f9c000405f92eb56e6c54e48671529f7"
+    },
+    {
+      "path": "server/controllers/wardrobeController.js",
+      "before": "781dd0aa170a3b7eebcdea3a7be0e082926dbfdd7aa08617ad012fb1d51cb3c7",
+      "after": "cb35dab76c4e7de84b87b8abcc0cdd854f553218feb25b70ee11dd89fd2a2c70"
+    },
+    {
+      "path": "server/middleware/community.js",
+      "before": "40dcface3695afc89388e5b98a28399e44a8f12d523f30f96001245d85627f77",
+      "after": "ef74b0c84fecfe80e220f9f2c252fab0bf81d0787388790717eebdbd5e379b2e"
+    },
+    {
+      "path": "server/models/OutfitRequest.js",
+      "before": "122405fc4734d8dd81714d0536df05f24b202d15c376ed12828b78857b3f0ad6",
+      "after": "4a39dcb460391877cf4ca6c58acc80090dfc9dc44845f0cd07f06c41a5eb9d1b"
+    },
+    {
+      "path": "server/models/RequestPurchase.js",
+      "before": null,
+      "after": "228316684e225963178e5132b2db2b96caf82495a946a5f8d4351a06729eb8c3"
+    },
+    {
+      "path": "server/models/WardrobeItem.js",
+      "before": "ceec0c75b8d094929f66aa63ef96b98b6a91b7e4ae32101ad53fe3334ce5da35",
+      "after": "a67ba676efab2ab9f4fc40543e9b3622d648d23d5a7f9f469d7ff43a76df3116"
+    },
+    {
+      "path": "server/routes/community.js",
+      "before": "990ee1e3f9b935fb8c6f1881e5a57fc2b3fcad1f16d0e0421ff64779d2eca71f",
+      "after": "a0bf3bc56aaf847c08e6ecdfb67659b6288589f8756209db23c1b0eb12401e89"
+    },
+    {
+      "path": "server/server.js",
+      "before": "792d40744ad12f048ca858fc951c68b4830c32cc94ccdfa35c1eb8f40cbad8ec",
+      "after": "18590d9784846c3bc0ad97a3ddf065321f572c07944505b2fe789f74d8ece050"
+    },
+    {
+      "path": "server/tests/camera.test.cjs",
+      "before": null,
+      "after": "f283391fb40a134d85ee507b1c2324769243edc802ae81bea854f2df0cea4cd3"
+    },
+    {
+      "path": "server/tests/community-business-integration.test.js",
+      "before": null,
+      "after": "6e138d63ac285f74e5c5dc4e1f6175c5aadb33e2d9056a60664d682cfa44e7d2"
+    },
+    {
+      "path": "server/tests/community-management.test.js",
+      "before": null,
+      "after": "f54a34563ec0b8c10e37d5112cc2ec590857c52a665658bb9b15f1995eef746c"
+    },
+    {
+      "path": "server/tests/helpers/memoryModels.js",
+      "before": "6bad66e106cf1a8040e89ab011f7a8bb5feb06e6c3636b8bcadfe9aa78154cde",
+      "after": "aef9ae3ffa7c78347369771e1393d261f07c0844c7214a2931b14ec4103a7ca4"
+    },
+    {
+      "path": "server/tests/request-purchase.test.js",
+      "before": null,
+      "after": "25aa2342f1477d7f4be9271f9f47a118d46e6b4a3b6f901634b01676bc8249d6"
+    },
+    {
+      "path": "src/assets/styles/community.css",
+      "before": "b87276524250a82688630bff58d89b44cb3de922dec5e060d56188a611ccaf9b",
+      "after": "c38bbc8869960807a350e80d6c9b0db0c6d512e0d624b17bf1db4a56eec6705f"
+    },
+    {
+      "path": "src/components/CameraCapture.vue",
+      "before": null,
+      "after": "629064dca9c1ebae4fb2b67e4f88e6aba91c98882e7bf6d5e7af6efd384cdbf6"
+    },
+    {
+      "path": "src/components/CommunityHistory.vue",
+      "before": null,
+      "after": "834966fc08266615423142408d3b6640dc8d423fe0cdd96ee4e09fa84b691808"
+    },
+    {
+      "path": "src/components/CommunityIcon.vue",
+      "before": "4500f91f1c9f3aa0276737e866871e92177aa0052ddf7897ffab7f08f19eb4bc",
+      "after": "b0fa3d7040a068b4819e970746b04a9f2de65e80d1c395f75a7a25eeb140a7be"
+    },
+    {
+      "path": "src/components/CommunityListingCard.vue",
+      "before": null,
+      "after": "9c6411726a90184eeee3146aa818fb194915d9de0d58e9e45872f243bccb5bc2"
+    },
+    {
+      "path": "src/components/CommunityTabs.vue",
+      "before": "694bd7bb8a3cca8d71d0597f2832232229218d317b7a0eb0becafd89d2965c9d",
+      "after": "edbd5e8e7c2dcdfbc958bd052db5973a69d99aea2120069a69da97d9257bdfd6"
+    },
+    {
+      "path": "src/components/ListingTypeBadge.vue",
+      "before": null,
+      "after": "3c230f52616188f5d95ac80e35bd72c0512fcdf632ce9aba2a47ef8de70a41c8"
+    },
+    {
+      "path": "src/components/ProductCard.vue",
+      "before": "02c9c7a72ef0e13d5d95e17412fddbfc4c29301bbfb377133f1d9b1df2f3c5f1",
+      "after": "c9830ab367833fa3b71484814d9b733de83e75f42e5c4ebe88413f3863bb5c33"
+    },
+    {
+      "path": "src/components/RequestCard.vue",
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "4384403545e9a6daa999670596e42da0415ca33d9964e817018e1d2aada418ec"
+    },
+    {
+      "path": "src/components/RequestSuggestionAction.vue",
+      "before": null,
+      "after": "80d72280cc66331d3c728c697c8e4a471c0027ee0f636de869f009ef24059bc5"
+    },
+    {
+      "path": "src/router/communityRoutes.js",
+      "before": "86d5638a9702f3b44960f623a80f1a62b2de2aed71839734f3d36e86e6d0fff6",
+      "after": "564545058b151d48fbb03ea66f93c75d9bee26b665fd5506b8a962ec888ea6df"
+    },
+    {
+      "path": "src/view/auth/Profile.vue",
+      "before": "857058b83e14ee638194c879ac755b0e5f61f424e4ac38d4db0227921ce8e49c",
+      "after": "10f9ccd7bad4db690d23669e3d6be38cc70ca61c93757429db0e6c6374f4a1b1"
+    },
+    {
+      "path": "src/view/business/CustomerRequest.vue",
+      "before": "aea37c3880a4a4889425d6a3cdda5074bf8493be7b90bfa1e3629433635c17cd",
+      "after": "5caa0bddda4e6b2f8cf2a197944b4cc56bdfdfdec845807859700051a1397b2e"
+    },
+    {
+      "path": "src/view/community/ListingDetail.vue",
+      "before": "28731a1e20c85b0fcca7702b9e16374ee4efda71d3fed57999040f8c235c317b",
+      "after": "c614985922665428ad27a18363be0b0c17b032bb8815aeeb0baeff754ddf2eee"
+    },
+    {
+      "path": "src/view/community/ListingForm.vue",
+      "before": "dc3827414463a482fc6f64409d3fc11985e7a0afa6d8df6afedf68aa15735bc0",
+      "after": "49310dda4fd4f7ae18708e745486380e5d495ab0517e79f8d1de9dc380714105"
+    },
+    {
+      "path": "src/view/community/Marketplace.vue",
+      "before": "6631c0fe3997b41ae8f39859b5a2c2f8413b1a0f4f1784852ed183c6f49784d2",
+      "after": "0ae6d6134924578b62ac1229f6f1063e9dad3e1f6042159c8bbaea07d18496ec"
+    },
+    {
+      "path": "src/view/community/MemberProfile.vue",
+      "before": null,
+      "after": "b6427a87d05686fb999d9b950c6d7f55345dd08108e995e8d0d3733f802288f7"
+    },
+    {
+      "path": "src/view/community/MyListings.vue",
+      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": "ec126b3a3de0f3c11e97cb508209b5347093632224cb106904822ea5aa60381a"
+    },
+    {
+      "path": "src/view/community/RequestBoard.vue",
+      "before": "e6c26212abe1deae905cc17c3efbd37fa25ada093da9590b61078f3d4a2be166",
+      "after": "aae20ab695f585983eb5a7b38393f30feb7e1ed81dd12f2fa64e5294624dc603"
+    },
+    {
+      "path": "src/view/community/RequestCheckout.vue",
+      "before": null,
+      "after": "67613fdd5613ea2debc81170c83bae19eb0583c08cdcb77893cc79d0d39ce9de"
+    },
+    {
+      "path": "src/view/community/RequestDetail.vue",
+      "before": "004cc022c16d2aa4b9721af8056b33bfc88de642bd7535e0a77a517c151fe161",
+      "after": "56f9c583316b73e84f687f1c7d1963347470e31644fa58c435b513035813fd14"
+    },
+    {
+      "path": "src/view/discover/ProductDetail.vue",
+      "before": "1a5dab8d959f6f1fc1753b65fc37a69f5f6889cef490dfc4f7d072c914a0d9c0",
+      "after": "d3bff0e4ae0d7a7cd1b9178bc3acb77a3fe4661c0e99b3e863ecc583810c54b5"
+    },
+    {
+      "path": "src/view/wardrobe/Wardrobe.vue",
+      "before": "d7705a158bc31d463634f02473bccc75bdc322c85c7e8f0a706ab531efd144cf",
+      "after": "b7427105a76d7ec0ad35cfe8e9154bb4d61abfbbf1018e922ff145d9cf70d2b1"
+    }
+  ]
+}
