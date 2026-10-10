@@ -13,6 +13,8 @@ const { createCommunityRouter, defaultModels } = require("./routes/community");
 const { createBusinessRouter, createCatalogRouter, defaultModels: businessModels } = require("./routes/business");
 
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes')
+const reportRoutes = require('./routes/reportRoutes')
 const { createWardrobeRouter } = require('./routes/wardrobeRoutes');
 const WardrobeItem = require('./models/WardrobeItem');
 const SavedOutfit = require('./models/SavedOutfit');
@@ -33,6 +35,8 @@ app.use('/api', loadUser);
 app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
 // Every application API below this point requires a verified account.
 app.use('/api', requireAuth);
+app.use('/api/reports', reportRoutes)
+app.use('/api/admin', adminRoutes)
 app.use('/api/wardrobe', express.json({ limit: '8mb' }), createWardrobeRouter());
 app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());

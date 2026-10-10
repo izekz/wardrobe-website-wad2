@@ -28,7 +28,40 @@ export default {
       <div class="col-lg-6"><p class="community-eyebrow">Community marketplace</p><h1>{{ item.name }}</h1><p class="community-price fs-3 my-3">{{ listingPrice(item) }}</p><div class="d-flex flex-wrap gap-2 mb-4"><span class="community-tag">{{ item.listingType === 'rent' ? 'For rent' : 'For sale' }}</span><span class="community-tag peach">{{ item.style }}</span><span class="community-tag yellow">{{ item.status }}</span></div>
         <dl class="row"><dt class="col-4">Category</dt><dd class="col-8">{{ item.category }}</dd><dt class="col-4">Size</dt><dd class="col-8">{{ item.size }}</dd><dt class="col-4">Condition</dt><dd class="col-8">{{ item.condition }}</dd><dt class="col-4">Shared by</dt><dd class="col-8">{{ item.ownerName }}</dd></dl>
         <div class="community-panel mt-4"><h2>About this piece</h2><p class="community-description mb-0">{{ item.description }}</p></div>
+        
+      </div>
+      <div class="col-12 report-row">
+        <RouterLink
+          :to="{
+            name: 'community-report-listing',
+            params: { listingId: $route.params.listingId },
+          }"
+          class="report-link">
+          Report listing
+        </RouterLink>
       </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.report-row {
+  text-align: center;
+}
+
+.report-link {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #a0273f;
+  background: #fbe7eb;
+  border: 1px solid #a0273f;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.report-link:hover {
+  background: #a0273f;
+  color: white;
+}
+</style>

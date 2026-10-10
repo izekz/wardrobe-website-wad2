@@ -5,6 +5,7 @@ import authRoutes from './authRoutes'
 import businessRoutes from './businessRoutes'
 import surveyRoutes from './surveyRoutes'
 import discoverRoutes from './discoverRoutes'
+import adminRoutes from './adminRoutes'
 import { authState, restoreSession } from '../services/authService'
 import { createAuthGuard } from './routeAccess.mjs'
 
@@ -23,6 +24,7 @@ const router = createRouter({
     ...businessRoutes,
     ...surveyRoutes,
     ...discoverRoutes,
+    ...adminRoutes,
     { path: '/:pathMatch(.*)*', redirect: '/login' },
   ],
   scrollBehavior() { return { top: 0 } },

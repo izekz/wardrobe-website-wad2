@@ -54,7 +54,13 @@ export default {
           <span v-if="logoutError" role="alert">{{ logoutError }}</span>
           <button class="community-icon-button" type="button" aria-label="Search community" @click="focusSearch"><CommunityIcon name="search" :size="23" /></button>
           <span v-if="session?.mode === 'local-demo'" class="community-demo-label">Local demo</span>
-          <span class="community-avatar" :title="session?.mode === 'local-demo' ? 'Local demo · Test customer' : session?.name || 'Guest'" :aria-label="session?.mode === 'local-demo' ? 'Local demo · Test customer' : session?.name || 'Guest'">{{ initial }}</span>
+          <RouterLink v-if="session"
+              :to="{ name: 'profile' }"
+              class="community-avatar"
+              aria-label="Open your profile"
+            >
+              {{ initial }}
+            </RouterLink>
         </div>
       </div>
     </header>

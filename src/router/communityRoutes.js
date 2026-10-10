@@ -3,6 +3,7 @@ import ListingForm from '../view/community/ListingForm.vue'
 import ListingDetail from '../view/community/ListingDetail.vue'
 import RequestBoard from '../view/community/RequestBoard.vue'
 import RequestDetail from '../view/community/RequestDetail.vue'
+import ReportListing from '../view/community/ReportListing.vue'
 // Person 5 can merge this array into the group router alongside their own routes.
 export default [
   { path: '/community', name: 'community-marketplace', component: Marketplace },
@@ -10,4 +11,9 @@ export default [
   { path: '/community/listings/:listingId', name: 'community-listing', component: ListingDetail },
   { path: '/community/requests', name: 'community-requests', component: RequestBoard },
   { path: '/community/requests/:requestId', name: 'community-request', component: RequestDetail },
+  {
+  path: '/community/listings/:listingId/report',
+  name: 'community-report-listing',
+  component: ReportListing,
+  },
 ]
