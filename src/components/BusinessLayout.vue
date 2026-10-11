@@ -32,7 +32,7 @@ export default {
 <template>
   <div class="biz-shell">
     <aside class="biz-sidebar" :class="{ open: navOpen }" aria-label="Business portal">
-      <RouterLink :to="{ name: 'business-dashboard' }" class="biz-brand">Wardrobe<svg viewBox="0 0 40 40" aria-hidden="true"><g fill="#f6c6cf" stroke="#eaa0b0" stroke-width=".8"><ellipse v-for="petal in 5" :key="petal" cx="20" cy="11" rx="5" ry="8" :transform="`rotate(${petal * 72} 20 20)`" /><circle cx="20" cy="20" r="3" fill="#b05a78" /></g></svg></RouterLink>
+      <RouterLink :to="{ name: 'business-dashboard' }" class="biz-brand">Dripped<svg viewBox="0 0 40 40" aria-hidden="true"><g fill="#f6c6cf" stroke="#eaa0b0" stroke-width=".8"><ellipse v-for="petal in 5" :key="petal" cx="20" cy="11" rx="5" ry="8" :transform="`rotate(${petal * 72} 20 20)`" /><circle cx="20" cy="20" r="3" fill="#b05a78" /></g></svg></RouterLink>
       <div class="biz-sidebar-business"><span class="biz-eyebrow">Business</span><strong>{{ businessState.business?.businessName || 'Set up your business' }}</strong></div>
       <nav class="biz-side-nav">
         <RouterLink v-for="link in links" :key="link.name" :to="{ name: link.name }" :class="{ active: current(link) }" :aria-current="current(link) ? 'page' : undefined">

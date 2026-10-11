@@ -14,8 +14,6 @@ import {
 const route = useRoute(),
   router = useRouter();
 const items = ref([]),
-  plans = ref([]),
-  eligibleIds = ref([]),
   product = ref(null),
   weather = ref(null);
 const selectedIds = ref([]),
@@ -35,22 +33,12 @@ const occasion = ref("Presentation"),
 const productId = computed(() =>
   typeof route.query.productId === "string" ? route.query.productId : undefined,
 );
-const recommendedIds = computed(() => new Set(eligibleIds.value));
-const featuredIds = computed(
-  () =>
-    new Set((plans.value[0]?.pieces || []).map((p) => p.itemId || p.productId)),
-);
 const candidates = computed(() =>
-  [...items.value, ...(product.value ? [product.value] : [])].sort((a, b) => {
-    const aId = a.itemId || a.productId,
-      bId = b.itemId || b.productId;
-    return (
-      Number(recommendedIds.value.has(bId)) -
-        Number(recommendedIds.value.has(aId)) ||
-      Number(recommendedIds.value.has(bId) && featuredIds.value.has(bId)) -
-        Number(recommendedIds.value.has(aId) && featuredIds.value.has(aId))
-    );
-  }),
+  [...items.value, ...(product.value ? [product.value] : [])].sort((a, b) =>
+    (b.recommendation?.priority || 0) - (a.recommendation?.priority || 0) ||
+    (b.recommendation?.occasionScore || 0) - (a.recommendation?.occasionScore || 0) ||
+    a.name.localeCompare(b.name),
+  ),
 );
 const chosenCount = computed(
   () => selectedIds.value.length + Number(selectedProduct.value),
@@ -158,8 +146,6 @@ async function generate() {
     );
     if (version !== generation) return;
     items.value = result.items;
-    eligibleIds.value = result.recommendedIds || [];
-    plans.value = result.plans;
     product.value = result.product;
     weather.value = result.weather;
     selectedIds.value = selectedIds.value.filter((id) =>
@@ -362,9 +348,10 @@ watch(
             >
               <template #overlay
                 ><span
-                  v-if="recommendedIds.has(piece.itemId || piece.productId)"
+                  v-if="piece.recommendation?.label"
                   class="wd-recommended-tag wd-card-recommended"
-                  >Recommended!</span
+                  :class="{ 'wd-style-match-tag': piece.recommendation?.kind === 'style' }"
+                  >{{ piece.recommendation.label }}</span
                 ></template
               >
               <p class="wd-item-style">
@@ -453,18 +440,13 @@ watch(
               {{ chosenCount }}
               {{ chosenCount === 1 ? "piece" : "pieces" }} chosen by you. Score
               and progress reflect these pieces only.
+              <span v-if="selection?.scoreDetails.provisional">This is a provisional score for one piece.</span>
             </p>
           </div>
-          <ul v-if="selection" class="wd-reasons">
-            <li v-for="reason in selection.reasons" :key="reason">
-              {{ reason }}
-            </li>
-            <li
-              v-for="tip in selection.suggestions"
-              :key="tip"
-              class="wd-match-tip"
-            >
-              {{ tip }}
+          <ul v-if="selection?.comments?.length" class="wd-reasons">
+            <li v-for="comment in selection.comments" :key="comment.text"
+              :class="comment.kind === 'warning' ? 'wd-match-warning' : 'wd-match-tip'">
+              {{ comment.text }}
             </li>
           </ul>
           <div class="wd-basics-progress" aria-live="polite">
@@ -542,7 +524,7 @@ watch(
           >
             <h3>How your match score works</h3>
             <p class="wd-score-formula">
-              Occasion 40 + Style 25 + Colour 20 + Weather 15
+              Occasion 60 + Colour coordination 25 + Weather 15
             </p>
             <div v-if="selection" class="wd-score-breakdown">
               <div
@@ -553,19 +535,33 @@ watch(
                 ><strong>{{
                   component.available
                     ? `${component.earned.toFixed(1)} / ${component.weight}`
-                    : "Not available"
+                    : "Not assessed"
                 }}</strong>
               </div>
             </div>
             <p>
               Score = earned points ÷ available points × 100. Basic-piece
               completeness is shown separately. Unavailable checks are left out.
-              Rounded to a number from 0 to 100.
+              Selected outfits have a minimum display score of 5. This minimum is not a bonus.
             </p>
+            <p>Occasion points per piece: Style 30 + Category 15 + Colour 10 + Material 5.
+              Each property earns partial points independently. The outfit uses their average.</p>
+            <details v-if="selection" class="wd-item-score-details">
+              <summary>Points for each selected piece</summary>
+              <section v-for="item in selection.scoreDetails.itemDetails" :key="item.itemId || item.name">
+                <strong>{{ item.name }} · {{ item.earned }} / 60 occasion points</strong>
+                <div v-for="part in item.components" :key="part.label" class="wd-score-detail-row">
+                  <span>{{ part.label }}</span><span>{{ part.available ? `${part.earned} / ${part.weight}` : `Unknown · 0 / ${part.weight}` }}</span>
+                </div>
+              </section>
+              <p>Colour pairs: neutral 100%, same or complementary 67%, other known pairs 20%.
+                Weather checks earn full, half or zero points for temperature and rain. Unknown checks are left out.</p>
+            </details>
+            <p>Personal style preferences affect recommendations only. They do not add match points.</p>
             <p class="wd-score-key">
               <span class="good">75–100: Good</span
               ><span class="fair">50–74: Room to improve</span
-              ><span class="poor">0–49: Not ideal</span>
+              ><span class="poor">5–49: Not ideal</span>
             </p>
             <p>
               The badge and progress bar show the same score for your selected

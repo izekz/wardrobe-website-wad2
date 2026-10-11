@@ -12,6 +12,7 @@ const {
   assessSelection,
   rankItem,
   isRecommended,
+  recommendationFor,
 } = require("../services/outfitMatching");
 function itemJson(doc) {
   return {
@@ -57,6 +58,7 @@ function createWardrobeController(
       category: doc.category,
       style: [doc.style],
       material: doc.material || "",
+      colour: doc.colour || "",
       ...inferSuitability({
         category: doc.category,
         colour: doc.colour,
@@ -147,6 +149,9 @@ function createWardrobeController(
       lockedIds,
       product,
     });
+    for (const item of [...wardrobe, ...(product ? [product] : [])]) {
+      item.recommendation = recommendationFor(item, { occasion, styles });
+    }
     const recommendedIds = new Set(
       [...wardrobe, ...(product ? [product] : [])]
         .filter((item) =>

@@ -1526,3 +1526,12 @@
   outline: 2px solid #922a39;
   outline-offset: 3px;
 }
+
+/* Distinguish occasion warnings from preference-only recommendations. */
+.wd-reasons .wd-match-warning { color: #b52b3c; }
+.wd-style-match-tag { background: #eee4f7; border-color: #c8aedc; color: #624174; }
+.wd-card-recommended { max-width: calc(100% - 24px); text-align: center; }
+.wd-item-score-details { margin: 12px 0; font-size: .8rem; }
+.wd-item-score-details summary { cursor: pointer; color: #67415f; }
+.wd-item-score-details section { padding: 12px 0; border-bottom: 1px solid #eadfea; }
+.wd-score-detail-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; }

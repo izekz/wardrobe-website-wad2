@@ -144,7 +144,7 @@ export default {
 
       <aside class="biz-banner">
         <CommunityFloral class="biz-banner-flower" aria-hidden="true" />
-        <div><h2>Help the right people find your pieces</h2><p>Boost a product to get it in front of more students on Wardrobe.</p></div>
+        <div><h2>Help the right people find your pieces</h2><p>Boost a product to get it in front of more students on Dripped.</p></div>
         <RouterLink :to="{ name: 'business-promotions' }" class="biz-btn">View promotions <BusinessIcon name="chevron-right" :size="18" /></RouterLink>
       </aside>
     </template>

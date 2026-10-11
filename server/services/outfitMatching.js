@@ -1,159 +1,111 @@
-const { inferSuitability } = require("./clothingSuitability");
 const { badRequest } = require("./wardrobeValidation");
-const neutrals = new Set([
-  "white",
-  "black",
-  "beige",
-  "cream",
-  "grey",
-  "brown",
-  "navy",
-]);
-const pairs = new Set([
-  "blue:pink",
-  "green:pink",
-  "pink:purple",
-  "blue:yellow",
-  "green:yellow",
-  "purple:yellow",
-]);
-const array = (value) => (Array.isArray(value) ? value : value ? [value] : []);
-function colourScore(a, b) {
-  if (!a || !b || a === "Multicolour" || b === "Multicolour") return 0;
-  a = a.toLowerCase();
-  b = b.toLowerCase();
-  return neutrals.has(a) || neutrals.has(b)
-    ? 3
-    : a === b
-      ? 2
-      : pairs.has([a, b].sort().join(":"))
-        ? 2
-        : -1;
+const neutrals = new Set(["white", "black", "beige", "cream", "grey", "brown", "navy"]);
+const pairs = new Set(["blue:pink", "green:pink", "pink:purple", "blue:yellow", "green:yellow", "purple:yellow"]);
+const array = (value) => Array.isArray(value) ? value : value ? [value] : [];
+const lower = (value) => String(value || "").trim().toLowerCase();
+// Each property contributes independently. Preferences never change these occasion rules.
+const profiles = {
+  Presentation: { styles: [18, 9, 30, 27, 24, 24, 3, 15, 3, 3], polished: true, tip: "smart-casual or classic pieces in white, navy, black or beige" },
+  Interview: { styles: [9, 3, 30, 24, 27, 21, 0, 12, 0, 0], polished: true, tip: "formal or classic pieces in neutral colours" },
+  Work: { styles: [21, 12, 27, 30, 24, 24, 3, 15, 3, 0], polished: true, tip: "smart-casual pieces in neutral colours" },
+  "Formal dinner": { styles: [12, 3, 30, 21, 27, 15, 0, 21, 3, 0], polished: true, tip: "formal or classic pieces in black, navy or cream" },
+  Date: { styles: [24, 24, 24, 30, 27, 21, 18, 24, 21, 9], polished: false, tip: "smart-casual or classic pieces with one accent colour" },
+  "Casual outing": { styles: [24, 30, 12, 21, 21, 24, 30, 24, 27, 12], polished: false, tip: "casual or streetwear pieces with one neutral colour" },
+  University: { styles: [27, 30, 12, 24, 21, 30, 27, 21, 24, 9], polished: false, tip: "casual, preppy or minimalist pieces" },
+};
+const styleNames = ["minimalist", "casual", "formal", "smart casual", "classic", "preppy", "streetwear", "vintage", "y2k", "cosplay"];
+const colourNames = new Set([...neutrals, "blue", "pink", "purple", "green", "red", "yellow", "orange", "multicolour"]);
+function materialKind(material) {
+  const text = lower(material);
+  if (/waterproof|water-resistant|rubber|nylon/.test(text)) return "rain";
+  if (/fleece|sweat|heavy/.test(text)) return "heavy";
+  if (/denim|jersey/.test(text)) return "relaxed";
+  if (/cotton|linen/.test(text)) return "light";
+  if (/wool|silk|leather|polyester|viscose|rayon|structured|tailored/.test(text)) return "polished";
+  return null;
 }
-function rankItem(item, occasion, styles, weather) {
-  let score = array(item.occasions).includes(occasion) ? 6 : 0;
-  if (array(item.style).some((s) => styles.includes(s))) score += 3;
-  if (weather?.available) {
-    for (const tag of weather.tags)
-      score += array(item.weather).includes(tag) ? 3 : -2;
-    if (
-      weather.tags.includes("Warm") &&
-      /wool|fleece|heavy/i.test(item.material || "")
-    )
-      score -= 5;
+function occasionRating(item, occasion) {
+  const profile = profiles[occasion];
+  if (!profile) throw badRequest("Choose a valid occasion.");
+  const indices = array(item.style).map(s => styleNames.indexOf(lower(s))).filter(i => i >= 0);
+  const category = item.category;
+  const categoryPoints = profile.polished
+    ? { Jackets: 15, Tops: 10, Bottoms: 10, Dresses: 10, Shoes: 8, Accessories: 4 }
+    : { Jackets: 10, Tops: 15, Bottoms: 15, Dresses: 15, Shoes: 12, Accessories: 8 };
+  const colour = lower(item.colour), knownColour = colourNames.has(colour);
+  const kind = materialKind(item.material);
+  const components = [
+    { label: "Style", weight: 30, available: indices.length > 0, earned: indices.length ? Math.max(...indices.map(i => profile.styles[i])) : 0 },
+    { label: "Category", weight: 15, available: category in categoryPoints, earned: categoryPoints[category] || 0 },
+    { label: "Colour", weight: 10, available: knownColour, earned: !knownColour ? 0 : neutrals.has(colour) ? 10 : colour === "multicolour" ? 2 : profile.polished ? ["pink", "purple"].includes(colour) ? 7 : 3 : 8 },
+    { label: "Material", weight: 5, available: !!kind, earned: !kind ? 0 : profile.polished ? { polished: 5, light: 4, relaxed: 2, heavy: 1, rain: 2 }[kind] : { polished: 4, light: 5, relaxed: 5, heavy: 3, rain: 4 }[kind] },
+  ];
+  return { name: item.name || "This piece", itemId: item.itemId || item.productId, earned: components.reduce((n, c) => n + c.earned, 0), weight: 60, components, enoughData: components.every(c => c.available) };
+}
+function recommendationFor(item, { occasion, styles = [] }) {
+  const earned = occasionRating(item, occasion).earned;
+  const styleMatch = array(item.style).some(s => styles.some(preference => lower(preference) === lower(s)));
+  const occasionMatch = earned >= 36;
+  return { kind: occasionMatch ? "occasion" : styleMatch ? "style" : null, label: occasionMatch ? `Recommended for ${occasion}` : styleMatch ? "Matches your style" : "", occasionScore: earned, styleMatch, priority: occasionMatch ? styleMatch ? 3 : 2 : styleMatch ? 1 : 0 };
+}
+function isRecommended(item, context) { return recommendationFor(item, context).kind === "occasion"; }
+function rankItem(item, occasion, styles = []) {
+  const result = recommendationFor(item, { occasion, styles });
+  return result.priority * 100 + result.occasionScore;
+}
+function colourScore(a, b) {
+  a = lower(a); b = lower(b);
+  if (!colourNames.has(a) || !colourNames.has(b) || a === "multicolour" || b === "multicolour") return 0;
+  if (neutrals.has(a) || neutrals.has(b)) return 3;
+  if (a === b || pairs.has([a, b].sort().join(":"))) return 2;
+  return 0.6;
+}
+function weatherRating(item, weather) {
+  if (!weather?.available || item.category === "Accessories" || !materialKind(item.material)) return null;
+  const material = lower(item.material), tags = array(weather.tags);
+  const warm = tags.includes("Warm") || Number.isFinite(weather.temperature) && weather.temperature >= 26;
+  const cool = !warm && (tags.includes("Cool") || Number.isFinite(weather.temperature));
+  const checks = [];
+  if (warm || cool) {
+    let ratio;
+    if (warm) ratio = /fleece|heavy|wool/.test(material) ? 0 : /cotton|linen|silk|viscose|rayon/.test(material) ? 1 : 0.5;
+    else ratio = /wool|fleece|heavy/.test(material) ? 1 : /cotton|linen/.test(material) ? 0.5 : 1;
+    if (item.category === "Shoes" && !/heavy|winter|fleece/.test(material)) ratio = 1;
+    checks.push({ label: "Temperature", weight: ["Shoes", "Jackets"].includes(item.category) ? 5 : 15, ratio });
   }
-  return score;
+  if (["Shoes", "Jackets"].includes(item.category) && (tags.includes("Rainy") || Number.isFinite(weather.rainChance) || weather.condition)) {
+    const rainy = tags.includes("Rainy") || Number.isFinite(weather.rainChance) && weather.rainChance >= 50;
+    const ratio = !rainy ? 1 : /waterproof|water-resistant|rubber/.test(material) ? 1 : /leather|nylon/.test(material) ? 0.5 : 0;
+    checks.push({ label: "Rain", weight: 10, ratio });
+  }
+  if (!checks.length) return null;
+  const weight = checks.reduce((n, c) => n + c.weight, 0);
+  return { name: item.name, checks, ratio: checks.reduce((n, c) => n + c.weight * c.ratio, 0) / weight };
 }
 function compatiblePieces(pieces) {
   const counts = {};
   for (const p of pieces) counts[p.category] = (counts[p.category] || 0) + 1;
-  return (
-    !Object.values(counts).some((n) => n > 1) &&
-    !(counts.Dresses && (counts.Tops || counts.Bottoms))
-  );
+  return !Object.values(counts).some(n => n > 1) && !(counts.Dresses && (counts.Tops || counts.Bottoms));
 }
-function matchRating(pieces, occasion, styles, weather, gaps = []) {
-  const count = pieces.length || 1;
-  let colourTotal = 0,
-    colourPairs = 0,
-    sharedStyles = 0,
-    pairCount = 0;
-  for (let i = 0; i < pieces.length; i++)
-    for (let j = i + 1; j < pieces.length; j++) {
-      pairCount++;
-      if (
-        array(pieces[i].style).some((tag) =>
-          array(pieces[j].style).includes(tag),
-        )
-      )
-        sharedStyles++;
-      if (
-        pieces[i].colour &&
-        pieces[j].colour &&
-        pieces[i].colour !== "Multicolour" &&
-        pieces[j].colour !== "Multicolour"
-      ) {
-        colourPairs++;
-        colourTotal +=
-          Math.max(0, colourScore(pieces[i].colour, pieces[j].colour)) / 3;
-      }
-    }
+function matchRating(pieces, occasion, styles, weather) {
+  if (!pieces.length) return { matchScore: null, scoreDetails: { components: [], availableWeight: 0, penalty: 0 } };
+  const itemDetails = pieces.map(p => occasionRating(p, occasion));
+  let colourTotal = 0, colourPairs = 0;
+  for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
+    const points = colourScore(pieces[i].colour, pieces[j].colour);
+    if (points > 0) { colourPairs++; colourTotal += points / 3; }
+  }
+  const weatherDetails = pieces.map(p => weatherRating(p, weather)).filter(Boolean);
   const components = [
-    {
-      label: "Occasion",
-      weight: 40,
-      available: true,
-      ratio:
-        pieces.filter((p) => array(p.occasions).includes(occasion)).length /
-        count,
-    },
-    {
-      label: "Style",
-      weight: 25,
-      available: styles.length > 0 || pairCount > 0,
-      ratio: styles.length
-        ? pieces.filter((p) =>
-            array(p.style).some((tag) => styles.includes(tag)),
-          ).length / count
-        : pairCount
-          ? sharedStyles / pairCount
-          : 0,
-    },
-    {
-      label: "Colour",
-      weight: 20,
-      available: colourPairs > 0,
-      ratio: colourPairs ? colourTotal / colourPairs : 0,
-    },
-    {
-      label: "Weather",
-      weight: 15,
-      available: !!weather?.available && weather.tags.length > 0,
-      ratio:
-        weather?.available && weather.tags.length
-          ? pieces.reduce((sum, p) => {
-              const tagged =
-                weather.tags.filter((tag) => array(p.weather).includes(tag))
-                  .length / weather.tags.length;
-              const heavy =
-                weather.tags.includes("Warm") &&
-                /wool|fleece|heavy/i.test(p.material || "");
-              return sum + Math.max(0, tagged - (heavy ? 0.5 : 0));
-            }, 0) / count
-          : 0,
-    },
-  ].map((c) => ({
-    label: c.label,
-    weight: c.weight,
-    available: c.available,
-    earned: c.available ? c.weight * c.ratio : 0,
-  }));
-  const availableWeight = components
-    .filter((c) => c.available)
-    .reduce((sum, c) => sum + c.weight, 0);
-  const points = components.reduce((sum, c) => sum + c.earned, 0),
-    penalty = gaps.length * 20;
-  return {
-    matchScore: Math.round(
-      Math.max(
-        0,
-        Math.min(
-          100,
-          availableWeight ? (points / availableWeight) * 100 - penalty : 0,
-        ),
-      ),
-    ),
-    scoreDetails: { components, availableWeight, penalty },
-  };
+    { label: "Occasion", weight: 60, available: true, earned: itemDetails.reduce((n, i) => n + i.earned, 0) / pieces.length },
+    { label: "Colour coordination", weight: 25, available: colourPairs > 0, earned: colourPairs ? 25 * colourTotal / colourPairs : 0 },
+    { label: "Weather", weight: 15, available: weatherDetails.length > 0, earned: weatherDetails.length ? 15 * weatherDetails.reduce((n, i) => n + i.ratio, 0) / weatherDetails.length : 0 },
+  ];
+  const availableWeight = components.filter(c => c.available).reduce((n, c) => n + c.weight, 0);
+  const earned = components.reduce((n, c) => n + c.earned, 0);
+  const rawScore = Math.round(earned / availableWeight * 100);
+  return { matchScore: Math.max(5, Math.min(100, rawScore)), scoreDetails: { components, itemDetails, weatherDetails, availableWeight, earned, penalty: 0, minimumApplied: rawScore < 5, provisional: pieces.length === 1 } };
 }
-
-function isRecommended(item, { occasion, styles = [] }) {
-  const occasionMatch = inferSuitability(item).occasions.includes(occasion);
-  const styleMatch =
-    styles.length > 0 && array(item.style).some((tag) => styles.includes(tag));
-  return occasionMatch || styleMatch;
-}
-
 function recommendations(
   items,
   { occasion, styles = [], weather, lockedIds = [], product = null },
@@ -207,12 +159,7 @@ function recommendations(
         .filter(
           (p) =>
             p.category === category &&
-            rankItem(p, occasion, styles, weather) > 0 &&
-            !(
-              category === "Jackets" &&
-              weather?.tags.includes("Warm") &&
-              /wool|fleece|heavy/i.test(p.material || "")
-            ),
+            isRecommended(p, { occasion, styles }),
         )
         .sort(
           (a, b) =>
@@ -243,43 +190,15 @@ function recommendations(
             style += 2;
         }
       score += colour + style;
-      const reasons = [];
-      if (colour > 0)
-        reasons.push(
-          "Neutral or complementary colours help these pieces work together.",
-        );
-      if (style > 0) reasons.push("The pieces share style tags.");
-      const occasionCount = pieces.filter((p) =>
-        array(p.occasions).includes(occasion),
-      ).length;
-      reasons.push(
-        `${occasionCount} of ${pieces.length} pieces are tagged for ${occasion.toLowerCase()}.`,
-      );
-      if (occasionCount < pieces.length)
-        reasons.push(
-          "Some pieces are not tagged for this occasion. Check suitability before wearing.",
-        );
-      if (weather?.available) {
-        const suitable = pieces.filter((p) =>
-          weather.tags.every((tag) => array(p.weather).includes(tag)),
-        ).length;
-        reasons.push(
-          `${suitable} of ${pieces.length} pieces have all the forecast weather tags.`,
-        );
-        if (suitable < pieces.length)
-          reasons.push("Weather suitability is not confirmed for every piece.");
-      }
-      if (product && !product.colour)
-        reasons.push(
-          "This store product has no colour tag, so its colour compatibility is not scored.",
-        );
+      const reasons = product && !product.colour
+        ? ["This store product has no colour tag, so its colour compatibility is not scored."] : [];
       plans.push({
         pieces,
         gaps,
         score,
         reasons,
         complete: gaps.length === 0,
-        ...matchRating(pieces, occasion, styles, weather, gaps),
+        ...matchRating(pieces, occasion, styles, null),
       });
     }
   }
@@ -288,8 +207,8 @@ function recommendations(
     .sort(
       (a, b) =>
         Number(b.complete) - Number(a.complete) ||
-        b.matchScore - a.matchScore ||
-        b.score - a.score,
+        b.score - a.score ||
+        b.matchScore - a.matchScore,
     )
     .filter((p) => {
       const key = p.pieces
@@ -304,86 +223,31 @@ function recommendations(
 }
 function assessSelection(pieces, occasion, styles, weather) {
   if (!pieces.length) return null;
-  if (!compatiblePieces(pieces))
-    throw badRequest(
-      "Choose one piece per category. A dress replaces a top and bottom.",
-    );
-  pieces = pieces.map((piece) => ({ ...piece, ...inferSuitability(piece) }));
-  const categories = new Set(pieces.map((p) => p.category));
-  const required = categories.has("Dresses")
-    ? ["Dresses", "Shoes"]
-    : ["Tops", "Bottoms", "Shoes"];
-  const gaps = required.filter((category) => !categories.has(category));
-  const tagged = pieces.filter((p) => p.occasions.includes(occasion)).length;
-  const reasons = [
-    `${tagged} of ${pieces.length} selected pieces are tagged for ${occasion.toLowerCase()}.`,
-  ];
-  if (tagged < pieces.length)
-    reasons.push(
-      "Some selected pieces are not tagged for this occasion. Check suitability before wearing.",
-    );
-  const occasionTips = {
-    Presentation:
-      "Try smart-casual or classic pieces in white, navy, black or beige.",
-    Interview:
-      "Choose formal pieces in neutral colours; avoid denim and fleece.",
-    Date: "Try casual or classic styles with one soft or accent colour.",
-    "Casual outing": "Try casual or streetwear pieces with one neutral colour.",
-    "Formal dinner":
-      "Choose formal styles with black, navy or another coordinated colour.",
-    Work: "Try smart-casual styles with neutral colours.",
-    University: "Try casual, preppy or minimalist pieces for an everyday look.",
-  };
-  const suggestions = [occasionTips[occasion]].filter(Boolean);
-  if (
-    styles.length &&
-    pieces.some((p) => !array(p.style).some((tag) => styles.includes(tag)))
-  )
-    suggestions.push(
-      `Look for ${styles.slice(0, 2).join(" or ").toLowerCase()} pieces to match your style filter.`,
-    );
-  else {
-    const colour = matchRating(
-      pieces,
-      occasion,
-      styles,
-      weather,
-    ).scoreDetails.components.find((c) => c.label === "Colour");
-    if (colour.available && colour.earned < colour.weight * 0.5)
-      suggestions.push("Pair a bright piece with white, black, beige or navy.");
+  if (!compatiblePieces(pieces)) throw badRequest("Choose one piece per category. A dress replaces a top and bottom.");
+  const categories = new Set(pieces.map(p => p.category));
+  const required = categories.has("Dresses") ? ["Dresses", "Shoes"] : ["Tops", "Bottoms", "Shoes"];
+  const gaps = required.filter(c => !categories.has(c));
+  const rating = matchRating(pieces, occasion, styles, weather);
+  const comments = [];
+  for (const item of rating.scoreDetails.itemDetails) {
+    if (item.enoughData && item.earned < 24) {
+      comments.push({ kind: "warning", text: `${item.name} is not suitable for ${occasion.toLowerCase()}.` });
+      comments.push({ kind: "suggestion", text: `Try ${profiles[occasion].tip}.` });
+    } else if (item.components.some(c => !c.available)) {
+      const missing = item.components.filter(c => !c.available).map(c => c.label.toLowerCase());
+      comments.push({ kind: "suggestion", text: `Try adding ${missing.join(" and ")} details for ${item.name}.` });
+    } else if (item.earned < 36) {
+      comments.push({ kind: "suggestion", text: `Try ${profiles[occasion].tip}.` });
+    }
   }
-  return {
-    pieces,
-    gaps,
-    complete: gaps.length === 0,
-    reasons,
-    suggestions,
-    basics: {
-      selected: required.length - gaps.length,
-      total: required.length,
-      percent: Math.round(
-        ((required.length - gaps.length) / required.length) * 100,
-      ),
-    },
-    ...matchRating(pieces, occasion, styles, weather),
-  };
+  const colour = rating.scoreDetails.components.find(c => c.label === "Colour coordination");
+  if (colour.available && colour.earned < colour.weight * 0.5)
+    comments.push({ kind: "suggestion", text: "Try white, black, beige or navy to balance bright colours." });
+  const uniqueComments = comments.filter((c, i) => comments.findIndex(other => other.text === c.text) === i);
+  return { pieces, gaps, complete: gaps.length === 0, comments: uniqueComments, reasons: [], suggestions: [], basics: { selected: required.length - gaps.length, total: required.length, percent: Math.round((required.length - gaps.length) / required.length * 100) }, ...rating };
 }
-
 function completePieces(pieces) {
-  const categories = new Set(pieces.map((p) => p.category));
-  return (
-    categories.has("Shoes") &&
-    (categories.has("Dresses") ||
-      (categories.has("Tops") && categories.has("Bottoms")))
-  );
+  const categories = new Set(pieces.map(p => p.category));
+  return categories.has("Shoes") && (categories.has("Dresses") || categories.has("Tops") && categories.has("Bottoms"));
 }
-module.exports = {
-  recommendations,
-  compatiblePieces,
-  completePieces,
-  colourScore,
-  rankItem,
-  matchRating,
-  assessSelection,
-  isRecommended,
-};
+module.exports = { recommendations, compatiblePieces, completePieces, colourScore, rankItem, matchRating, assessSelection, isRecommended, occasionRating, recommendationFor, weatherRating };

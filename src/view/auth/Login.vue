@@ -30,7 +30,7 @@ async function submit() {
   <section class="auth-login">
 
     <div class="login-visual">
-      <RouterLink to="/community" class="login-brand">Wardrobe <span aria-hidden="true">✿</span></RouterLink>
+      <RouterLink to="/community" class="login-brand">Dripped <span aria-hidden="true">✿</span></RouterLink>
       <div class="login-visual-heading"><h1>Welcome back<br>to your wardrobe.</h1><span class="login-stroke" aria-hidden="true"></span></div>
     </div>
 
@@ -49,7 +49,7 @@ async function submit() {
           <p v-if="notice" class="login-message" role="status">{{ notice }}</p>
           <button class="login-submit" type="submit" :disabled="busy">{{ busy ? 'Logging in…' : 'Log in' }} <span v-if="!busy" aria-hidden="true">→</span></button>
         </form>
-        <template v-if="registrationRoute"><div class="login-divider"><span>or</span></div><p class="login-register">New to Wardrobe? <RouterLink :to="{ name: 'register' }">Create account</RouterLink></p></template>
+        <template v-if="registrationRoute"><div class="login-divider"><span>or</span></div><p class="login-register">New to Dripped? <RouterLink :to="{ name: 'register' }">Create account</RouterLink></p></template>
         <p v-else class="login-register">Use the account provided by your project team.</p>
         <div class="login-tagline"><span aria-hidden="true">✿</span><p>Made for your style, your budget, your everyday.</p></div>
       </div>

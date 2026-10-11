@@ -299,10 +299,10 @@ test("Private wardrobe HTTP workflows", async (t) => {
         style: "Minimalist",
       });
       assert.deepEqual(
-        [...otherOccasion.body.recommendedIds].sort(),
-        [top.itemId, bottom.itemId, shoes.itemId].sort(),
+        otherOccasion.body.recommendedIds, [],
       );
       assert.equal(otherOccasion.body.items.length, 3);
+      assert.ok(otherOccasion.body.items.every(item => item.recommendation.kind === "style" && item.recommendation.label === "Matches your style"));
       const otherStyle = await api("/recommendations", "POST", {
         occasion: "Presentation",
         style: "Formal",
@@ -344,7 +344,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
         [top.itemId],
       );
       assert.equal(partial.body.selection.complete, false);
-      assert.equal(partial.body.selection.matchScore, 91);
+      assert.equal(partial.body.selection.matchScore, 76);
       assert.equal(partial.body.selection.scoreDetails.penalty, 0);
       assert.deepEqual(partial.body.selection.basics, {
         selected: 1,
@@ -356,7 +356,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
         itemIds: [top.itemId, bottom.itemId, shoes.itemId],
       });
       assert.equal(full.body.selection.complete, true);
-      assert.equal(full.body.selection.matchScore, 93);
+      assert.equal(full.body.selection.matchScore, 80);
       assert.deepEqual(full.body.selection.basics, {
         selected: 3,
         total: 3,
@@ -587,56 +587,63 @@ test("weather handles Singapore dates, API failure and out-of-range forecasts ho
   );
 });
 
-test("normalised match ratings explain strong, weak, partial and unavailable-data outfits", () => {
-  const { matchRating } = require("../services/outfitMatching");
-  const pieces = ["Tops", "Bottoms", "Shoes"].map((category, i) => ({
-    category,
-    colour: ["White", "Black", "Beige"][i],
-    style: ["Minimalist"],
-    occasions: ["Presentation"],
-    weather: ["Warm", "Rainy"],
-    material: "Cotton",
-  }));
-  const strong = matchRating(pieces, "Presentation", ["Minimalist"], weather);
-  assert.equal(strong.matchScore, 100);
-  assert.equal(strong.scoreDetails.availableWeight, 100);
-  assert.equal(
-    strong.scoreDetails.components.reduce((sum, c) => sum + c.earned, 0),
-    100,
-  );
-  const weak = matchRating(
-    pieces.map((p) => ({
-      ...p,
-      occasions: ["Casual outing"],
-      style: ["Streetwear"],
-      weather: ["Cool"],
-    })),
-    "Presentation",
-    ["Formal"],
-    weather,
-  );
-  assert.equal(weak.matchScore, 20);
-  const unavailable = matchRating(pieces, "Presentation", ["Minimalist"], {
-    available: false,
-  });
-  assert.equal(unavailable.matchScore, 100);
-  assert.equal(unavailable.scoreDetails.availableWeight, 85);
-  assert.equal(
-    unavailable.scoreDetails.components.find((c) => c.label === "Weather")
-      .available,
-    false,
-  );
-  const partial = matchRating(
-    [pieces[0]],
-    "Presentation",
-    ["Minimalist"],
-    weather,
-    ["Bottoms", "Shoes"],
-  );
-  assert.equal(partial.matchScore, 60);
-  assert.equal(partial.scoreDetails.penalty, 40);
-  for (const result of [strong, weak, unavailable, partial])
-    assert.ok(result.matchScore >= 0 && result.matchScore <= 100);
+test("partial occasion points, unavailable checks and preferences have independent effects", () => {
+  const { matchRating, occasionRating } = require("../services/outfitMatching");
+  const shirt = { name: "Store shirt", category: "Tops", style: ["Minimalist"] };
+  const occasion = occasionRating(shirt, "Presentation");
+  assert.equal(occasion.earned, 28); // 18 style + 10 category; unknown colour/material earn no occasion points.
+  assert.equal(matchRating([shirt], "Presentation", [], weather).matchScore, 47);
+  assert.equal(matchRating([shirt], "Presentation", ["Formal"], weather).matchScore, 47);
+  assert.equal(matchRating([shirt], "Presentation", [], weather).scoreDetails.availableWeight, 60);
+  const linen = { ...shirt, colour: "White", material: "Linen" };
+  const partial = matchRating([linen], "Presentation", [], weather, ["Bottoms", "Shoes"]);
+  assert.equal(partial.matchScore, 76); // (42 occasion + 15 weather) / 75.
+  assert.equal(partial.scoreDetails.penalty, 0);
+  assert.equal(partial.scoreDetails.provisional, true);
+  assert.equal(partial.scoreDetails.components.find(c => c.label === "Colour coordination").available, false);
+  const noForecast = matchRating([linen], "Presentation", [], { available: false });
+  assert.equal(noForecast.matchScore, 70); // 42 / 60, no weather denominator.
+  const zero = matchRating([{ category: "Unknown", style: [], colour: "Unknown", material: "Unknown" }], "Presentation", [], weather);
+  assert.equal(zero.matchScore, 5);
+  assert.equal(zero.scoreDetails.minimumApplied, true);
+  assert.equal(matchRating([], "Presentation", [], weather).matchScore, null);
+  const pair = [{ ...linen, colour: "Red" }, { ...linen, category: "Bottoms", colour: "Blue" }];
+  assert.equal(matchRating(pair, "Presentation", [], weather).scoreDetails.components[1].earned, 5);
+  const cached = { ...linen, occasions: ["Interview"], weather: ["Cool"] };
+  assert.deepEqual(matchRating([cached], "Presentation", [], weather), matchRating([linen], "Presentation", [], weather));
+});
+
+test("weather evaluates fabric and category without rewarding accessories or unknown materials", () => {
+  const { weatherRating } = require("../services/outfitMatching");
+  assert.equal(weatherRating({ category: "Tops", material: "Linen" }, weather).ratio, 1);
+  assert.equal(weatherRating({ category: "Tops", material: "Heavy fleece" }, weather).ratio, 0);
+  assert.equal(weatherRating({ category: "Shoes", material: "Rubber" }, weather).ratio, 1);
+  assert.equal(weatherRating({ category: "Shoes", material: "Leather" }, weather).ratio, 2 / 3);
+  assert.equal(weatherRating({ category: "Accessories", material: "Rubber" }, weather), null);
+  assert.equal(weatherRating({ category: "Tops", material: "Unknown" }, weather), null);
+  assert.equal(weatherRating({ category: "Tops", material: "Linen" }, { available: false }), null);
+});
+
+test("warnings require known metadata and recommendations distinguish occasion from preference", () => {
+  const { assessSelection, recommendationFor, occasionRating } = require("../services/outfitMatching");
+  const unsuitable = { name: "Red streetwear top", category: "Tops", colour: "Red", material: "Fleece", style: ["Streetwear"] };
+  const selected = assessSelection([unsuitable], "Presentation", ["Streetwear"], weather);
+  assert.equal(selected.comments[0].kind, "warning");
+  assert.equal(selected.comments[0].text, "Red streetwear top is not suitable for presentation.");
+  assert.ok(selected.comments.some(c => c.kind === "suggestion" && c.text.startsWith("Try ")));
+  assert.equal(recommendationFor(unsuitable, { occasion: "Presentation", styles: ["Streetwear"] }).kind, "style");
+  assert.equal(recommendationFor(unsuitable, { occasion: "Presentation", styles: ["Formal"] }).kind, null);
+  assert.equal(assessSelection([{ ...unsuitable, material: "" }], "Presentation", [], weather).comments.some(c => c.kind === "warning"), false);
+  const formal = { ...unsuitable, style: ["Formal"], colour: "Black", material: "Linen" };
+  assert.equal(recommendationFor(formal, { occasion: "Presentation", styles: ["Formal"] }).priority, 3);
+  assert.equal(recommendationFor(formal, { occasion: "Presentation", styles: ["Streetwear"] }).priority, 2);
+  assert.equal(recommendationFor(unsuitable, { occasion: "Presentation", styles: ["Streetwear"] }).priority, 1);
+  assert.deepEqual(recommendationFor(formal, { occasion: "Presentation", weather }), recommendationFor(formal, { occasion: "Presentation", weather: { available: false } }));
+  for (const occasion of ["Presentation", "Interview", "Work", "Date", "Formal dinner", "Casual outing", "University"])
+    for (const style of ["Minimalist", "Casual", "Formal", "Smart casual", "Classic", "Preppy", "Streetwear", "Vintage", "Y2K", "Cosplay"]) {
+      const points = occasionRating({ ...formal, style: [style] }, occasion).earned;
+      assert.ok(Number.isFinite(points) && points >= 0 && points <= 60);
+    }
 });
 
 test("recommendation badges match occasion OR style regardless of weather", () => {
@@ -762,17 +769,8 @@ test("basic-piece completion is independent of match quality and accessories are
   assert.equal(complete.basics.percent, 100);
   assert.deepEqual(complete.gaps, []);
   assert.equal(complete.complete, true);
-  assert.equal(
-    complete.reasons[0],
-    "0 of 3 selected pieces are tagged for presentation.",
-  );
-  assert.ok(complete.reasons.some((r) => r.startsWith("Some selected pieces")));
-  assert.equal(
-    complete.reasons.some(
-      (r) => r.startsWith("Neutral") || r.startsWith("Weather suitability"),
-    ),
-    false,
-  );
+  assert.equal(complete.comments.some(c => c.kind === "warning"), false);
+  assert.ok(complete.comments.some(c => c.text.startsWith("Try ")));
   const accessory = assessSelection(
     [...["Tops", "Bottoms", "Shoes"].map(piece), piece("Accessories")],
     "Presentation",
