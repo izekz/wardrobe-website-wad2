@@ -14,6 +14,7 @@ const schema = new mongoose.Schema({
   acceptedAt: Date,
   purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestPurchase', default: null },
   fulfilledAt: Date,
+  deletedAt: { type: Date, default: null },
   clientRequestId: { type: String, required: true }
 }, { timestamps: true, collection: 'outfit_requests' });
 schema.index({ consumerId: 1, clientRequestId: 1 }, { unique: true });

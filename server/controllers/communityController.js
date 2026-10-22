@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const validation = require('../communityValidation');
+const { listedColours } = require('../services/listedColours');
 const defaultModels = {
   Listing: require('../models/CommunityListing'),
   Request: require('../models/OutfitRequest'),
@@ -100,10 +101,10 @@ function createCommunityController(models = defaultModels) {
     if (!idIsValid(req.params.id)) return res.status(404).json({ message: 'Request not found.' });
     const status = req.body?.status;
     if (!['open', 'closed'].includes(status)) throw validation.badRequest('Choose open or closed.');
-    const filter = { _id: req.params.id, consumerId: req.communityActor.id };
+    const filter = { _id: req.params.id, consumerId: req.communityActor.id, deletedAt: null };
     const existing = await Request.findOne(filter);
     if (!existing) return res.status(404).json({ message: 'Request not found or it does not belong to you.' });
-    if (existing.purchaseId) return res.status(409).json({ message: 'This request was fulfilled by a demo purchase. Create a new request for another item.' });
+    if (existing.purchaseId || existing.acceptedResponseId) return res.status(409).json({ message: 'This request has an accepted suggestion or completed purchase. Delete it instead if you no longer need it.' });
     filter.purchaseId = null;
     if (status === 'open') {
       if (existing.deadline < validation.singaporeToday()) throw validation.badRequest('This request is past its needed-by date. Post a new request instead.');
@@ -114,13 +115,23 @@ function createCommunityController(models = defaultModels) {
     res.json({ request: requestJson(item) });
   }
 
+  async function deleteRequest(req, res) {
+    if (!idIsValid(req.params.id)) return res.status(404).json({ message: 'Request not found.' });
+    // Hide the request instead of orphaning suggestions, receipts, and wardrobe items.
+    // Requests owned by other customers or already deleted cannot be removed.
+    const item = await Request.findOneAndUpdate({ _id: req.params.id, consumerId: req.communityActor.id, deletedAt: null },
+      { $set: { deletedAt: new Date(), status: 'closed' } }, { returnDocument: 'after', runValidators: true });
+    if (!item) return res.status(404).json({ message: 'Request not found or it does not belong to you.' });
+    res.json({ message: 'Request deleted.' });
+  }
+
   async function getMember(req, res) {
     const id = cleanQuery(req.params.id, 100);
     let user = idIsValid(id) ? await User.findById(id).select('name role suspended') : null;
     if (user?.suspended) return res.status(404).json({ message: 'Member not found.' });
     // Older demo posts keep their original owner. Never assign them to whoever logs in.
     if (!user) {
-      const [listing, request] = await Promise.all([Listing.findOne({ ownerId: id }), Request.findOne({ consumerId: id })]);
+      const [listing, request] = await Promise.all([Listing.findOne({ ownerId: id }), Request.findOne({ consumerId: id, deletedAt: null })]);
       if (!listing && !request) return res.status(404).json({ message: 'Member not found.' });
       user = { name: listing?.ownerName || request.consumerName, role: 'consumer' };
     }
@@ -128,8 +139,8 @@ function createCommunityController(models = defaultModels) {
     const [listings, listingTotal, requests, requestTotal] = await Promise.all([
       Listing.find({ ownerId: id }).sort({ createdAt: -1, _id: -1 }).skip((listingPage - 1) * pageSize).limit(pageSize),
       Listing.countDocuments({ ownerId: id }),
-      Request.find({ consumerId: id }).sort({ status: -1, createdAt: -1, _id: -1 }).skip((requestPage - 1) * pageSize).limit(pageSize),
-      Request.countDocuments({ consumerId: id })
+      Request.find({ consumerId: id, deletedAt: null }).sort({ status: -1, createdAt: -1, _id: -1 }).skip((requestPage - 1) * pageSize).limit(pageSize),
+      Request.countDocuments({ consumerId: id, deletedAt: null })
     ]);
     // Public profile data only: no email, password, session, or preferences.
     res.json({ member: { id, name: user.name, role: user.role },
@@ -200,7 +211,7 @@ function createCommunityController(models = defaultModels) {
   }
 
   async function getRequests(req, res) {
-    const filter = {};
+    const filter = { deletedAt: null };
     const search = cleanQuery(req.query.search);
     if (search) filter.title = { $regex: escapeRegex(search), $options: 'i' };
     const style = cleanQuery(req.query.style);
@@ -244,7 +255,7 @@ function createCommunityController(models = defaultModels) {
 
   async function getRequest(req, res) {
     if (!idIsValid(req.params.id)) return res.status(404).json({ message: 'Request not found.' });
-    const item = await Request.findById(req.params.id);
+    const item = await Request.findOne({ _id: req.params.id, deletedAt: null });
     if (!item) return res.status(404).json({ message: 'Request not found.' });
     const responses = await Response.find({ requestId: item._id }).sort({ createdAt: -1 });
     const productIds = responses.map(reply => reply.productId).filter(idIsValid);
@@ -260,13 +271,14 @@ function createCommunityController(models = defaultModels) {
         if (!p || p.businessId !== reply.businessId) return null;
         return { productId: String(p._id), businessName: p.businessName, name: p.name, price: p.price,
           category: p.category, style: p.style, sizes: p.sizes, occasions: p.occasions, stock: p.stock,
+          availableColours: listedColours(p),
           imageURL: `/api/catalog/products/${p._id}/image`, reasons: [p.price <= item.budget ? 'Within your budget' : 'Above your budget'] };
       })()
     })) });
   }
 
   return { getSession, getListings, createListing, getListingImage, getListing, getRequests, createRequest, getRequest,
-    getMyListings, updateListing, setListingStatus, deleteListing, setRequestStatus, getMember };
+    getMyListings, updateListing, setListingStatus, deleteListing, setRequestStatus, deleteRequest, getMember };
 }
 
 module.exports = { createCommunityController, defaultModels };

@@ -24,7 +24,7 @@ async function submit() {
   <section class="registration-page">
     <header class="registration-header"><RouterLink to="/login" class="registration-brand">Dripped <span aria-hidden="true">✿</span></RouterLink><span>Already a member? <RouterLink to="/login">Log in</RouterLink></span></header>
     <div class="registration-layout">
-      <aside class="registration-story"><h1>Find your<br>kind of style.</h1><p>Pre-loved, new and unique fashion<br>from your university community.</p><img src="../../assets/images/register-style.png" alt="A relaxed everyday look in soft lilac and cream" /><CommunityFloral class="registration-flower" aria-hidden="true" /></aside>
+      <aside class="registration-story"><h1>Find your<br>kind of style.</h1><p>Your personal style, wardrobe, and<br>fashion businesses in one place.</p><img src="../../assets/images/register-style.png" alt="A relaxed everyday look in soft lilac and cream" /><CommunityFloral class="registration-flower" aria-hidden="true" /></aside>
       <div class="registration-card">
         <h2>Create your account</h2><p class="registration-subtitle">A little more you, every day.</p>
         <form @submit.prevent="submit" :aria-busy="busy">

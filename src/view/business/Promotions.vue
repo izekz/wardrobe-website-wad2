@@ -53,6 +53,11 @@ export default {
       <div v-if="notice" class="biz-success" role="status">{{ notice }}</div>
       <div v-if="error" class="biz-error" role="alert">{{ error }}</div>
 
+      <section class="biz-card biz-section" style="background:#fff1f7;border:1px solid #efd2e3">
+        <h2>New · Boost outfit videos on Style Feed</h2>
+        <p>Publish free short videos connected to your products. Spend 20 coins for 7 days of rotating sponsored placement, then track impressions, unique reach, views, likes, and product/store clicks.</p>
+        <RouterLink :to="{ name: 'business-style-videos' }" class="biz-btn biz-btn-pink">Manage Style Feed videos →</RouterLink>
+      </section>
       <section class="biz-card biz-section">
         <h2>What coins can do</h2>
         <div class="biz-perks">

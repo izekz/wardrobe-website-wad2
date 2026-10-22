@@ -1,10 +1,10 @@
 <script>
-import CommunityHistory from '../../components/CommunityHistory.vue'
+
 import { authState } from '../../services/authService'
 import { getSurvey, saveSurvey } from '../../services/surveyService'
 
 export default {
-  components: { CommunityHistory },
+
   data() {
     return {
       styles: [
@@ -50,7 +50,8 @@ export default {
   },
 
   async mounted() {
-    await this.loadPreferences()
+    if (this.user?.role === 'consumer') await this.loadPreferences()
+    else this.loading = false
   },
 
   methods: {
@@ -146,8 +147,8 @@ export default {
 
         <nav aria-label="Profile sections">
           <a href="#profile-details">Profile</a>
-          <a v-if="user?.role === 'consumer'" href="#community-history">Listings &amp; request history</a>
-          <RouterLink v-if="user?.role === 'consumer'" :to="{ name: 'community-my-listings' }">Manage my listings</RouterLink>
+          <RouterLink v-if="user?.role === 'consumer'" :to="{ name: 'community-requests', query: { mine: 'true' } }">Outfit requests</RouterLink>
+
           <a
             v-if="user?.role === 'consumer'"
             href="#style-preferences"
@@ -314,7 +315,7 @@ export default {
         </RouterLink>
       </aside>
     </div>
-    <CommunityHistory v-if="user?.role === 'consumer'" :user-id="user.id" :show-header="false" class="mt-5" />
+
   </section>
 </template>
 

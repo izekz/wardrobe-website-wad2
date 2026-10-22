@@ -8,7 +8,7 @@ import CustomerRequest from '../view/business/CustomerRequest.vue'
 
 // Person 4: business portal pages. The global guard has already restored the login,
 // so this only checks the account type.
-const businessOnly = () => authState.user?.role === 'business' || { name: 'community-marketplace', replace: true }
+const businessOnly = () => authState.user?.role === 'business' || { name: 'style-feed', replace: true }
 
 export default [
   { path: '/business', name: 'business-dashboard', component: Dashboard, meta: { businessLayout: true }, beforeEnter: businessOnly },

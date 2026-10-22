@@ -2,13 +2,14 @@
 import { authState } from '../services/authService'
 import { communityApi, money, today } from '../services/communityApi'
 export default {
-  props: { product: { type: Object, required: true }, selectedSize: { type: String, default: '' } },
+  props: { product: { type: Object, required: true } },
   data() { return { request: null, reply: null, loading: false, busy: false, error: '', loadVersion: 0 } },
   computed: {
     hasContext() { return typeof this.$route.query.requestId === 'string' && typeof this.$route.query.responseId === 'string' },
     isOwner() { return this.request?.consumerId === authState.user?.id },
     isOpen() { return this.request?.status === 'open' && this.request.deadline >= today() && this.product.stock > 0 },
-    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId }, query: this.selectedSize ? { size: this.selectedSize } : {} } },
+    isAccepted() { return this.request?.status === 'closed' && this.request.acceptedResponseId === this.reply?.responseId && !this.request.fulfilled },
+    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId } } },
   },
   watch: { '$route.fullPath': { immediate: true, handler() { this.load() } } },
   beforeUnmount() { this.loadVersion++ },
@@ -33,7 +34,7 @@ export default {
       this.busy = true; this.error = ''
       try {
         await communityApi(`/requests/${this.request.requestId}/responses/${this.reply.responseId}/accept`, { method: 'POST', body: '{}' })
-        await this.$router.push(this.checkoutRoute)
+        await this.$router.push({ name: 'community-request', params: { requestId: this.request.requestId }, query: { accepted: '1' } })
       } catch (error) { this.error = error.message }
       finally { this.busy = false }
     },
@@ -47,9 +48,10 @@ export default {
       <p class="community-eyebrow">Suggested for {{ isOwner ? 'your' : 'an' }} outfit request</p>
       <h2>{{ request.title }}</h2><p>Budget {{ money(request.budget) }} · {{ request.preferredStyle }}</p><p>{{ reply.message }}</p>
       <RouterLink v-if="isOwner && request.fulfilled && request.acceptedResponseId === reply.responseId" :to="checkoutRoute" class="community-btn">View demo receipt</RouterLink>
-      <button v-else-if="isOwner && isOpen" type="button" class="community-btn w-100" :disabled="busy" @click="accept">{{ busy ? 'Accepting…' : request.acceptedResponseId === reply.responseId ? 'Continue to checkout' : 'Accept suggestion' }}</button>
+      <RouterLink v-else-if="isOwner && isAccepted" :to="checkoutRoute" class="community-btn">Continue to demo checkout</RouterLink>
+      <button v-else-if="isOwner && isOpen" type="button" class="community-btn w-100" :disabled="busy" @click="accept">{{ busy ? 'Accepting…' : 'Accept suggestion' }}</button>
       <p v-else-if="isOwner" class="community-muted">{{ request.fulfilled ? 'You have already purchased a suggestion for this request.' : 'This request or item is no longer available for checkout.' }}</p>
-      <p v-if="isOwner && isOpen" class="community-muted small mt-2">Next: review a demo purchase. No real payment is charged.</p>
+      <p v-if="isOwner && isOpen" class="community-muted small mt-2">Accepting closes the request. You can complete a demo purchase afterward.</p>
       <RouterLink :to="{ name: 'community-request', params: { requestId: request.requestId } }" class="d-inline-block mt-2">← Back to the request</RouterLink>
     </template>
     <p v-if="error" class="community-error" role="alert">{{ error }}</p>

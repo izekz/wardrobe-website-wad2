@@ -25,6 +25,7 @@ function createCommunityRouter(models = defaultModels, transact) {
   router.post('/requests', requireCustomer, controller.createRequest);
   router.get('/requests/:id', controller.getRequest);
   router.patch('/requests/:id/status', requireCustomer, controller.setRequestStatus);
+  router.delete('/requests/:id', requireCustomer, controller.deleteRequest);
   router.post('/requests/:id/responses/:responseId/accept', requireCustomer, commerce.accept);
   router.post('/requests/:id/responses/:responseId/purchase', requireCustomer, commerce.purchase);
   router.get('/requests/:id/purchase', requireCustomer, commerce.getPurchase);

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { singaporeToday } = require('../communityValidation');
 const wardrobeValidation = require('../services/wardrobeValidation');
+const { listedColours } = require('../services/listedColours');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function receipt(doc) {
   return {
@@ -20,7 +21,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
     return { _id: req.params.id, consumerId: req.communityActor.id };
   }
   async function ownRequest(req, session = null) {
-    const request = await Request.findOne(ids(req)).session(session);
+    const request = await Request.findOne({ ...ids(req), deletedAt: null }).session(session);
     if (!request) throw fail(404, 'This request does not belong to you.');
     return request;
   }
@@ -42,12 +43,12 @@ function createRequestCommerceController(models, transact = work => mongoose.con
     if (request.purchaseId) throw fail(409, 'This request already has a completed demo purchase.');
     assertOpen(request);
     await suggestedProduct(req);
-    const updated = await Request.findOneAndUpdate({ ...ids(req), status: 'open', purchaseId: null,
+    const updated = await Request.findOneAndUpdate({ ...ids(req), status: 'open', deletedAt: null, purchaseId: null,
       deadline: { $gte: singaporeToday() } }, {
-      $set: { acceptedResponseId: req.params.responseId, acceptedAt: new Date() },
+      $set: { status: 'closed', acceptedResponseId: req.params.responseId, acceptedAt: new Date() },
     }, { returnDocument: 'after', runValidators: true });
     if (!updated) throw fail(409, 'The request changed. Refresh and try again.');
-    res.json({ acceptedResponseId: String(updated.acceptedResponseId), message: 'Suggestion selected. Complete the demo purchase to add it to your wardrobe.' });
+    res.json({ acceptedResponseId: String(updated.acceptedResponseId), message: 'Suggestion accepted. Your request is now closed. You can still complete the optional demo purchase.' });
   }
   async function getPurchase(req, res) {
     await ownRequest(req);
@@ -64,20 +65,25 @@ function createRequestCommerceController(models, transact = work => mongoose.con
         if (String(previous.responseId) !== req.params.responseId) throw fail(409, 'A different suggestion was already purchased for this request.');
         return { purchase: receipt(previous), alreadyPurchased: true };
       }
-      assertOpen(request);
-      if (String(request.acceptedResponseId) !== req.params.responseId) throw fail(409, 'Accept this suggestion before completing your demo purchase.');
+      if (request.status !== 'closed' || !request.acceptedAt || String(request.acceptedResponseId) !== req.params.responseId) {
+        throw fail(409, 'Accept this suggestion before completing your demo purchase.');
+      }
       const { product, response } = await suggestedProduct(req, session);
       const size = wardrobeValidation.text(req.body?.size, 'Size', 20);
       if (!product.sizes.includes(size)) throw fail(400, 'Choose a size offered by this business.');
+      const offeredColours = listedColours(product);
+      if (offeredColours.length && !offeredColours.includes(req.body?.colour)) {
+        throw fail(400, 'The chosen colour is not listed for this product. Review the listing and try again.');
+      }
       if (typeof req.body?.expectedPrice !== 'number' || !Number.isFinite(req.body.expectedPrice)) throw fail(400, 'Review the current price before confirming.');
       if (req.body.expectedPrice !== product.price) throw fail(409, 'The price has changed. Refresh this page and review the new total before confirming.');
       const clothing = wardrobeValidation.itemInput({
         name: product.name, category: product.category, style: [product.style],
-        colour: req.body?.colour, material: typeof req.body?.material === 'string' ? req.body.material.trim() || 'Not specified' : 'Not specified',
+        colour: req.body?.colour, material: 'Not specified', // The product schema has no material field; customers must not invent one at checkout.
       }, false);
       if (!product.photo?.data) throw fail(409, 'This product is missing its photo. Ask the business to update it.');
       const purchaseId = new mongoose.Types.ObjectId();
-      const claimed = await Request.findOneAndUpdate({ ...ids(req), status: 'open', purchaseId: null,
+      const claimed = await Request.findOneAndUpdate({ ...ids(req), status: 'closed', deletedAt: null, purchaseId: null,
         acceptedResponseId: response._id }, { $set: { status: 'closed', purchaseId, fulfilledAt: new Date() } },
       { returnDocument: 'after', runValidators: true, session });
       if (!claimed) throw fail(409, 'The request changed. Refresh and try again.');

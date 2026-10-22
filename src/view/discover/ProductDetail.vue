@@ -10,6 +10,7 @@ export default {
   data() { return { product: null, business: null, loading: true, error: '', size: '', saved: false, skipping: false, toast: '', loadVersion: 0 } },
   computed: {
     isShopper() { return authState.user?.role === 'consumer' },
+    isSuggestion() { return typeof this.$route.query.requestId === 'string' && typeof this.$route.query.responseId === 'string' },
     // Person 2's "Style it with my wardrobe" page, once it exists in the router.
     wardrobeRoute() { return this.$router.getRoutes().find(route => ['outfit-match', 'wardrobe-match', 'style-with-wardrobe'].includes(route.name)) },
   },
@@ -61,14 +62,14 @@ export default {
         <div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span v-for="occasion in product.occasions" :key="occasion" class="community-tag lilac">{{ occasion }}</span></div>
         <p class="disc-detail-desc">{{ product.description }}</p>
 
-        <fieldset>
+        <fieldset v-if="!isSuggestion">
           <legend class="form-label mb-0" style="font-weight:600">Size</legend>
           <div class="disc-sizes"><button v-for="item in product.sizes" :key="item" type="button" :class="{ selected: size === item }" :aria-pressed="size === item" @click="size = item">{{ item }}</button></div>
         </fieldset>
         <p v-if="product.stock === 0" class="community-error">Out of stock right now.</p>
         <p v-else-if="product.stock <= 3" class="community-muted small">Only {{ product.stock }} left.</p>
 
-        <RequestSuggestionAction :product="product" :selected-size="size" />
+        <RequestSuggestionAction :product="product" />
         <div class="disc-actions mt-3">
           <button v-if="wardrobeRoute" type="button" class="community-btn" @click="styleWithWardrobe"><CommunityIcon name="hanger" :size="22" /> Style with my wardrobe</button>
           <button v-else type="button" class="community-btn" disabled title="My wardrobe is coming soon"><CommunityIcon name="hanger" :size="22" /> Style with my wardrobe (coming soon)</button>

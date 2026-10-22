@@ -54,7 +54,7 @@ test('Request suggestions, owner controls and demo checkout', async t => {
   };
   let productId, requestId, responseId, receipt;
   const responsePath = () => `/community/requests/${requestId}/responses/${responseId}`;
-  const checkout = { size: 'M', colour: 'Beige', material: 'Cotton', expectedPrice: 38 };
+  const checkout = { size: 'M', colour: 'Beige', expectedPrice: 38 };
 
   await t.test('Business creates a product; customer posts; business replies with a clickable product and counted suggestion', async () => {
     const profile = await api('/business/profile', 'seller', 'PUT', { businessName: 'Minimalist Studio', description: 'Everyday pieces.', styles: ['Minimalist'], contact: 'studio@example.test', logo: png });
@@ -72,6 +72,7 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.match(detail.body.responses[0].product.imageURL, /\/api\/catalog\/products\/.+\/image/);
     assert.equal(detail.body.responses[0].product.style, 'Minimalist');
     assert.deepEqual(detail.body.responses[0].product.sizes, ['S', 'M', 'L']);
+    assert.deepEqual(detail.body.responses[0].product.availableColours, ['Beige']);
   });
   await t.test('My requests and status filters are applied in the database with suggestion counts', async () => {
     const bobs = await postRequest('bob', 'Jamie request');
@@ -96,9 +97,11 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.equal((await api(`/community/requests/${other}/responses/${responseId}/accept`, 'alice', 'POST', {})).status, 404);
     assert.equal((await api(responsePath() + '/accept', 'alice', 'POST', {}, { Origin: 'https://untrusted.example' })).status, 403);
     assert.equal((await api(responsePath() + '/accept', 'alice', 'POST', {})).status, 200);
+    assert.equal((await api(`/community/requests/${requestId}`)).body.request.status, 'closed', 'accepting closes the request before payment');
+    assert.equal((await api(`/community/requests/${requestId}/status`, 'alice', 'PATCH', { status: 'open' })).status, 409);
   });
   await t.test('Validation and price changes never reduce stock or create wardrobe items', async () => {
-    for (const body of [{ ...checkout, size: 'XXL' }, { ...checkout, colour: 'Made up' }, { ...checkout, expectedPrice: 1 }]) {
+    for (const body of [{ ...checkout, size: 'XXL' }, { ...checkout, colour: 'Made up' }, { ...checkout, colour: 'Black' }, { ...checkout, expectedPrice: 1 }]) {
       const failed = await api(responsePath() + '/purchase', 'alice', 'POST', body);
       assert.ok([400, 409].includes(failed.status));
     }
@@ -111,11 +114,11 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     try { assert.equal((await api(responsePath() + '/purchase', 'alice', 'POST', checkout)).status, 500); }
     finally { models.Item.create = create; }
     assert.equal((await models.Product.findById(productId)).stock, 3);
-    assert.equal((await models.Request.findById(requestId)).status, 'open');
+    assert.equal((await models.Request.findById(requestId)).status, 'closed', 'an accepted request stays closed after a failed checkout');
     assert.equal(await models.Purchase.countDocuments({ requestId }), 0);
   });
   await t.test('Concurrent repeated checkout produces one receipt, one stock deduction and one wardrobe item', async () => {
-    const attempts = await Promise.all([api(responsePath() + '/purchase', 'alice', 'POST', checkout), api(responsePath() + '/purchase', 'alice', 'POST', checkout)]);
+    const attempts = await Promise.all([api(responsePath() + '/purchase', 'alice', 'POST', { ...checkout, material: 'Fake silk' }), api(responsePath() + '/purchase', 'alice', 'POST', checkout)]);
     assert.deepEqual(attempts.map(x => x.status).sort(), [200, 201]);
     assert.equal(attempts[0].body.purchase.purchaseId, attempts[1].body.purchase.purchaseId);
     receipt = attempts[0].body.purchase;
@@ -126,6 +129,8 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.equal(wardrobe.body.items[0].itemId, receipt.wardrobeItemId);
     assert.equal(wardrobe.body.items[0].colour, 'Beige');
     assert.equal(wardrobe.body.items[0].size, 'M');
+    assert.equal(wardrobe.body.items[0].material, 'Not specified', 'checkout never invents the material');
+    assert.equal(receipt.material, 'Not specified');
     assert.equal((await api(`/wardrobe/items/${receipt.wardrobeItemId}/image`)).status, 200);
     assert.equal((await api(`/wardrobe/items/${receipt.wardrobeItemId}/image`, 'bob')).status, 404);
   });

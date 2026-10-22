@@ -9,6 +9,7 @@ function matches(doc, filter = {}) {
     if (value && typeof value === 'object' && !value._bsontype && !(value instanceof Date)) {
       return Object.entries(value).every(([operator, operand]) => {
         if (operator === '$in') return operand.some(item => String(item) === String(actual));
+        if (operator === '$nin') return !operand.some(item => String(item) === String(actual));
         if (operator === '$regex') return new RegExp(operand, value.$options).test(actual);
         if (operator === '$options') return true;
         if (operator === '$lte') return actual <= operand;

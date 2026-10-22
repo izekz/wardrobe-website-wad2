@@ -184,7 +184,7 @@ export default {
 
       <RouterLink
         :to="{
-          name: 'community-listing',
+          name: 'style-feed',
           params: { listingId: selected.listingId },
         }"
       >

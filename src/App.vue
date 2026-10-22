@@ -16,10 +16,10 @@ export default {
 <template>
   <RouterView v-if="isAuthPage" />
   <BusinessLayout v-else-if="isBusinessPage"><RouterView /></BusinessLayout>
-  <div v-else class="community-app">
+  <div v-else class="community-app" :class="{ 'community-style-feed': $route.name === 'style-feed' }">
     <AppNavbar :session="currentSession" />
     <div class="community-decoration" aria-hidden="true"><CommunityFloral class="community-edge-flower" /><CommunityFloral variant="sprig" class="community-edge-sprig" /><CommunityFloral class="community-lower-flower" /><CommunityFloral variant="sprig" class="community-lower-sprig" /></div>
     <main class="community-shell community-main"><RouterView /></main>
-    <AppFooter />
+    <AppFooter v-if="$route.name !== 'style-feed'" />
   </div>
 </template>
