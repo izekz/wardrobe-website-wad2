@@ -37,6 +37,7 @@ function createCatalogRouter(models = defaultModels) {
   const router = express.Router();
   const controller = createBusinessController(models);
   router.get('/products', controller.getCatalog);
+  router.get('/businesses/:id', controller.getCatalogBusiness);
   router.get('/products/:id', controller.getCatalogProduct);
   router.post('/products/:id/skip', controller.skipProduct);
   router.get('/products/:id/image', controller.getProductImage);

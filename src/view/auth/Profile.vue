@@ -2,11 +2,14 @@
 
 import { authState } from '../../services/authService'
 import { getSurvey, saveSurvey } from '../../services/surveyService'
+import { businessApi } from '../../services/businessApi'
 
 export default {
 
   data() {
     return {
+      business: null,
+      businessError: '',
       styles: [
         'Minimalist', 'Casual', 'Vintage', 'Streetwear',
         'Y2K', 'Formal', 'Preppy',
@@ -50,8 +53,20 @@ export default {
   },
 
   async mounted() {
-    if (this.user?.role === 'consumer') await this.loadPreferences()
-    else this.loading = false
+    if (this.user?.role === 'consumer') {
+      await this.loadPreferences()
+    } else {
+      this.loading = false
+
+      if (this.user?.role === 'business') {
+        try {
+          const result = await businessApi('/profile')
+          this.business = result.business
+        } catch (error) {
+          this.businessError = error.message
+        }
+      }
+    }
   },
 
   methods: {
@@ -187,6 +202,34 @@ export default {
               </p>
             </div>
           </div>
+        </section>
+
+        <section v-if="user?.role === 'business'" class="profile-card">
+          <h2>Your business</h2>
+
+          <p v-if="businessError" class="error-message" role="alert">
+            {{ businessError }}
+          </p>
+
+          <template v-if="business">
+            <h3>{{ business.businessName }}</h3>
+            <p>{{ business.description }}</p>
+
+            <RouterLink
+              :to="{
+                name: 'discover-business',
+                params: { businessId: business.businessId }
+              }"
+            >
+              View business profile &amp; listings →
+            </RouterLink>
+          </template>
+
+          <p class="hint">
+            <RouterLink :to="{ name: 'business-profile' }">
+              {{ business ? 'Edit business details' : 'Set up your business profile' }}
+            </RouterLink>
+          </p>
         </section>
 
         <form

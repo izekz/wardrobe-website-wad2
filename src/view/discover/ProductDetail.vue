@@ -56,7 +56,17 @@ export default {
     <div v-else-if="product" class="disc-detail">
       <img :src="product.imageURL" :alt="product.name" class="disc-detail-photo" />
       <div>
-        <span class="disc-store-link" :title="business?.description">{{ product.businessName }}</span>
+        <RouterLink
+          class="disc-store-link"
+          :to="{
+            name: 'discover-business',
+            params: { businessId: product.businessId }
+          }"
+          :title="business?.description"
+          style="text-decoration: underline; text-underline-offset: 4px;"
+        >
+          {{ product.businessName }}
+        </RouterLink>
         <h1>{{ product.name }}</h1>
         <p class="disc-detail-price">{{ money(product.price) }}</p>
         <div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span v-for="occasion in product.occasions" :key="occasion" class="community-tag lilac">{{ occasion }}</span></div>

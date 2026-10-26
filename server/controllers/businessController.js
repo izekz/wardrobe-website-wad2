@@ -379,6 +379,7 @@ function createBusinessController(models = defaultModels) {
     return { preferredStyles: user.preferredStyles || [], activities: user.activities || [], budget: user.budget || null };
   }
 
+    
   async function getCatalog(req, res) {
     await expirePromotions();
     const filter = { status: 'active' };
@@ -426,7 +427,37 @@ function createBusinessController(models = defaultModels) {
     ]);
     res.json({ products: items.map(product => ({ ...productJson(product), reasons: matchFor(product, prefs).reasons })), total, page, pageSize, personalised: false, preferences: prefs });
   }
+  async function getCatalogBusiness(req, res) {
+    if (!idIsValid(req.params.id)) {
+      throw failure(404, 'Business not found.');
+    }
 
+    const business = await Business.findById(req.params.id);
+
+    if (!business) {
+      throw failure(404, 'Business not found.');
+    }
+
+    const {
+      businessId,
+      businessName,
+      description,
+      styles,
+      contact,
+      logoURL
+    } = businessJson(business);
+
+    res.json({
+      business: {
+        businessId,
+        businessName,
+        description,
+        styles,
+        contact,
+        logoURL
+      }
+    });
+  }
   async function getCatalogProduct(req, res) {
     if (!idIsValid(req.params.id)) throw failure(404, 'Product not found.');
     const product = await Product.findOne({ _id: req.params.id, status: 'active' });
@@ -480,7 +511,7 @@ function createBusinessController(models = defaultModels) {
     getProfile, saveProfile, getMyProducts, getMyProduct, createProduct, updateProduct, deleteProduct,
     getWallet, purchaseCoins, boostProduct: promote('boost'), premiumProduct: promote('premium'),
     getDashboard, getRequests, respondToRequest,
-    getCatalog, getCatalogProduct, skipProduct, getProductImage, getBusinessLogo
+    getCatalog, getCatalogBusiness, getCatalogProduct, skipProduct, getProductImage, getBusinessLogo
   };
 }
 
