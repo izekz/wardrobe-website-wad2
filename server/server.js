@@ -9,10 +9,17 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const { createCommunityRouter, defaultModels } = require("./routes/community");
+const { router: styleFeedRouter } = require("./routes/styleFeed");
+const StyleVideo = require("./models/StyleVideo");
 // Person 4: business portal + store product catalogue.
 const { createBusinessRouter, createCatalogRouter, defaultModels: businessModels } = require("./routes/business");
 
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes')
+const reportRoutes = require('./routes/reportRoutes')
+const { createWardrobeRouter } = require('./routes/wardrobeRoutes');
+const WardrobeItem = require('./models/WardrobeItem');
+const SavedOutfit = require('./models/SavedOutfit');
 const surveyRoutes = require('./routes/surveyRoutes');
 const { loadUser, requireAuth } = require('./middleware/authentication');
 const User = require('./models/User');
@@ -30,8 +37,12 @@ app.use('/api', loadUser);
 app.use('/api/auth', express.json({ limit: '16kb' }), authRoutes);
 // Every application API below this point requires a verified account.
 app.use('/api', requireAuth);
+app.use('/api/reports', reportRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/wardrobe', express.json({ limit: '8mb' }), createWardrobeRouter());
 app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
+app.use("/api/style-feed", express.json({ limit: "12mb" }), styleFeedRouter);
 app.use("/api/business", express.json({ limit: "8mb" }), createBusinessRouter());
 app.use("/api/catalog", express.json({ limit: "16kb" }), createCatalogRouter());
 app.use(express.json());
@@ -58,8 +69,8 @@ async function startServer() {
       throw new Error('Local demo mode cannot run in production.');
     }
     await connectDB();
-    await Promise.all([defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
-      businessModels.Business.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init()]);
+    await Promise.all([WardrobeItem.init(), SavedOutfit.init(), defaultModels.Purchase.init(), defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
+      businessModels.Business.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init(), StyleVideo.init()]);
 
     const port = process.env.PORT || 3000;
 
@@ -69,14 +80,16 @@ async function startServer() {
       if (process.env.COMMUNITY_DEMO_MODE === 'true') console.log('Community demo mode is configured, but protected API access still requires login.');
     });
   } catch (error) {
-    console.error(`Backend startup failed: ${error.name}`);
+    // Print the actual cause instead of just "Error" so configuration and
+    // database connection problems are identifiable from the terminal.
+    console.error('Backend startup failed:', error);
     process.exit(1);
   }
 }
 
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
-  if (error.type === 'entity.too.large') return res.status(413).json({ message: 'Choose a photo of 5 MB or less.' });
+  if (error.type === 'entity.too.large') return res.status(413).json({ message: 'That upload is too large. Video maximum: 8 MB; photo maximum: 5 MB.' });
   if (error instanceof SyntaxError && error.status === 400) return res.status(400).json({ message: 'The submitted information could not be read.' });
   console.error('Request failed:', error.name);
   res.status(500).json({ message: 'The server could not complete the request.' });

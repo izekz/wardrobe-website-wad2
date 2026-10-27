@@ -88,7 +88,7 @@ load()
 <template>
   <section class="survey-page">
     <header class="survey-header">
-      <RouterLink to="/community" class="survey-brand">Wardrobe <span aria-hidden="true">✿</span></RouterLink>
+      <RouterLink to="/community" class="survey-brand">Dripped <span aria-hidden="true">✿</span></RouterLink>
       <nav aria-label="Main navigation">
         <span class="active">Discover</span>
         <span>My wardrobe</span>

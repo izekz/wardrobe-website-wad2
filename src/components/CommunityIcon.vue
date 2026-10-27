@@ -15,6 +15,8 @@ export default {
     <template v-else-if="name === 'calendar'"><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4m8-4v4M4 11h16" /></template>
     <path v-else-if="name === 'check'" d="m5 12 4 4L19 6" />
     <template v-else-if="name === 'upload'"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5" /></template>
+    <template v-else-if="name === 'camera'"><path d="M8 6 9.5 3h5L16 6h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></template>
+    <path v-else-if="name === 'close'" d="m6 6 12 12M18 6 6 18" />
     <template v-else-if="name === 'message'"><path d="M21 11a9 8 0 0 1-9 8 10 10 0 0 1-4-.8L3 21l1.5-5A7.6 7.6 0 0 1 3 11a9 8 0 0 1 18 0Z" /></template>
     <template v-else-if="name === 'shirt'"><path d="m8 4-6 4 3 5 3-2v10h8V11l3 2 3-5-6-4a4 4 0 0 1-8 0Z" /></template>
   </svg>

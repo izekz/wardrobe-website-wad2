@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "qa": "node qa/check-project.mjs && node --test server/tests/*.test.cjs server/tests/*.test.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

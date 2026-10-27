@@ -53,12 +53,17 @@ export default {
       <div v-if="notice" class="biz-success" role="status">{{ notice }}</div>
       <div v-if="error" class="biz-error" role="alert">{{ error }}</div>
 
+      <section class="biz-card biz-section" style="background:#fff1f7;border:1px solid #efd2e3">
+        <h2>New · Boost outfit videos on Style Feed</h2>
+        <p>Publish free short videos connected to your products. Spend 20 coins for 7 days of rotating sponsored placement, then track impressions, unique reach, views, likes, and product/store clicks.</p>
+        <RouterLink :to="{ name: 'business-style-videos' }" class="biz-btn biz-btn-pink">Manage Style Feed videos →</RouterLink>
+      </section>
       <section class="biz-card biz-section">
         <h2>What coins can do</h2>
         <div class="biz-perks">
           <div class="biz-perk"><span class="biz-stat-icon" style="background:#fde3ea;color:#8a3a5a"><BusinessIcon name="trend" /></span><div><strong>Boost · {{ wallet.costs.boost }} coins</strong><small>Shown above normal products in the store for {{ wallet.promotionDays }} days.</small></div></div>
           <div class="biz-perk"><span class="biz-stat-icon" style="background:#fff3cc;color:#7d5a10"><BusinessIcon name="crown" /></span><div><strong>Premium placement · {{ wallet.costs.premium }} coins</strong><small>Top of the store for {{ wallet.promotionDays }} days.</small></div></div>
-          <div class="biz-perk"><span class="biz-stat-icon" style="background:#efe7fb;color:#5a3c86"><BusinessIcon name="plus" /></span><div><strong>Extra listing · {{ wallet.costs['extra-listing'] }} coins</strong><small>For each product after your first 5 free listings.</small></div></div>
+          <div class="biz-perk"><span class="biz-stat-icon" style="background:#efe7fb;color:#5a3c86"><BusinessIcon name="plus" /></span><div><strong>Extra listing · {{ wallet.costs['extra-listing'] }} coins</strong><small>For each product after your first {{ wallet.freeListings ?? 20 }} free listings.</small></div></div>
         </div>
       </section>
 

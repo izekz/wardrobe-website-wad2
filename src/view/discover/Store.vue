@@ -11,25 +11,28 @@ export default {
   components: { ProductCard, CommunityIcon, CommunityFloral },
   data() {
     return { products: [], total: 0, page: 1, pageSize: 12, loading: true, error: '', loadVersion: 0, preferences: null,
-      mode: this.$route.query.view === 'all' ? 'all' : 'forYou', filters: blankFilters(), styles, categories, occasions }
+      mode: this.$route.query.businessId || this.$route.query.view === 'all' ? 'all' : 'forYou', filters: blankFilters(), styles, categories, occasions }
   },
   computed: {
     isShopper() { return authState.user?.role === 'consumer' },
     hasFilters() { return Object.values(this.filters).some(value => value !== '') },
     pageCount() { return Math.ceil(this.total / this.pageSize) },
     personal() { return this.mode === 'forYou' && this.preferences },
+    storefront() { return this.$route.query.businessId ? String(this.$route.query.businessName || 'this business') : '' },
   },
   mounted() { this.load() },
+  watch: { '$route.query.businessId'() { this.mode = this.$route.query.businessId ? 'all' : 'forYou'; this.filters = blankFilters(); this.load(1) } },
   methods: {
     money,
-    setMode(mode) { this.mode = mode; this.$router.replace({ query: mode === 'all' ? { view: 'all' } : {} }); this.load(1) },
+    setMode(mode) { this.mode = mode; this.$router.replace({ query: { ...(this.storefront ? { businessId: this.$route.query.businessId, businessName: this.storefront } : {}), ...(mode === 'all' ? { view: 'all' } : {}) } }); this.load(1) },
     resetFilters() { this.filters = blankFilters(); this.load(1) },
     async load(page = 1) {
       const version = ++this.loadVersion
       this.loading = true; this.error = ''
       const query = new URLSearchParams({ page })
       for (const [key, value] of Object.entries(this.filters)) if (value !== '') query.set(key, value)
-      if (this.mode === 'forYou') query.set('forYou', 'true')
+      if (this.$route.query.businessId) query.set('businessId', this.$route.query.businessId)
+      if (this.mode === 'forYou' && !this.storefront) query.set('forYou', 'true')
       try {
         const result = await catalogApi(`/products?${query}`)
         if (version !== this.loadVersion) return
@@ -45,9 +48,10 @@ export default {
   <section aria-labelledby="discover-heading">
     <div class="disc-hero">
       <div>
-        <h1 id="discover-heading">{{ personal ? 'Picked for your style' : 'Discover something new' }}</h1>
+        <h1 id="discover-heading">{{ storefront ? `Shop ${storefront}` : personal ? 'Picked for your style' : 'Discover something new' }}</h1>
         <p>{{ personal ? 'Pieces from small fashion businesses that fit your style, plans and budget.' : 'Browse pieces from small fashion businesses.' }}</p>
-        <div v-if="preferences" class="disc-prefs">
+        <div v-if="storefront" class="disc-prefs"><RouterLink :to="{ name: 'discover' }" class="community-text-button">← Back to all stores</RouterLink></div>
+        <div v-if="preferences && !storefront" class="disc-prefs">
           <span v-for="style in preferences.preferredStyles" :key="style" class="community-tag pink">{{ style }}</span>
           <span v-for="activity in preferences.activities.slice(0, 3)" :key="activity" class="community-tag lilac">{{ activity }}</span>
           <span v-if="preferences.budget" class="community-tag yellow">Up to {{ money(preferences.budget) }}</span>
@@ -62,7 +66,7 @@ export default {
     </div>
 
     <form class="disc-toolbar" role="search" @submit.prevent="load(1)">
-      <div v-if="preferences" class="community-segmented" role="group" aria-label="Which items">
+      <div v-if="preferences && !storefront" class="community-segmented" role="group" aria-label="Which items">
         <button type="button" :class="{ selected: mode === 'forYou' }" :aria-pressed="mode === 'forYou'" @click="setMode('forYou')">For you</button>
         <button type="button" :class="{ selected: mode === 'all' }" :aria-pressed="mode === 'all'" @click="setMode('all')">All items</button>
       </div>

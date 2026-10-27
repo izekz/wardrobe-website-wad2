@@ -10,6 +10,11 @@ const schema = new mongoose.Schema({
   preferredStyle: { type: String, required: true, enum: STYLES },
   deadline: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
   status: { type: String, enum: ['open', 'closed'], default: 'open' },
+  acceptedResponseId: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestResponse', default: null },
+  acceptedAt: Date,
+  purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestPurchase', default: null },
+  fulfilledAt: Date,
+  deletedAt: { type: Date, default: null },
   clientRequestId: { type: String, required: true }
 }, { timestamps: true, collection: 'outfit_requests' });
 schema.index({ consumerId: 1, clientRequestId: 1 }, { unique: true });

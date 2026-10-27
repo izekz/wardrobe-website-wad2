@@ -20,7 +20,8 @@ function requireCustomer(req, res, next) {
 }
 function handleCommunityError(error, req, res, next) {
     if (res.headersSent) return next(error);
-    if (error.status === 400) return res.status(400).json({ message: error.message });
+    if ([400, 401, 403, 404, 409].includes(error.status)) return res.status(error.status).json({ message: error.message });
+    if (error.code === 20) return res.status(503).json({ message: 'Demo checkout needs a MongoDB Atlas connection or a MongoDB replica set. Check the backend database connection.' });
     if (error.name === 'ValidationError') return res.status(400).json({ message: 'Check the required fields and try again.' });
     console.error('Community request failed:', error.name);
     res.status(500).json({ message: 'We could not complete that request. Please try again.' });

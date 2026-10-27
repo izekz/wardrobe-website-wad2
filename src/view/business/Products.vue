@@ -7,7 +7,7 @@ const PAGE_SIZE = 6
 export default {
   components: { BusinessIcon, CommunityFloral },
   data() {
-    return { products: [], freeListings: 5, extraListingCost: 10, loading: true, error: '', notice: '', needsProfile: false, busy: '', openMenu: '',
+    return { products: [], freeListings: 20, extraListingCost: 10, loading: true, error: '', notice: '', needsProfile: false, busy: '', openMenu: '',
       categories, filters: { search: '', category: '', availability: '', sort: 'updated' }, page: 1 }
   },
   computed: {
@@ -144,7 +144,7 @@ export default {
 
       <aside class="biz-banner">
         <CommunityFloral class="biz-banner-flower" aria-hidden="true" />
-        <div><h2>Help the right people find your pieces</h2><p>Boost a product to get it in front of more students on Wardrobe.</p></div>
+        <div><h2>Help the right people find your pieces</h2><p>Boost a product to get it in front of more students on Dripped.</p></div>
         <RouterLink :to="{ name: 'business-promotions' }" class="biz-btn">View promotions <BusinessIcon name="chevron-right" :size="18" /></RouterLink>
       </aside>
     </template>

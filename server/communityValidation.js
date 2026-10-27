@@ -2,6 +2,10 @@ const CATEGORIES = ['Tops', 'Bottoms', 'Jackets', 'Dresses', 'Shoes', 'Accessori
 const STYLES = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy'];
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+// Open outfit requests a customer can have for free. Each one after that costs EXTRA_REQUEST_CREDITS credits.
+const FREE_REQUESTS = 5;
+const EXTRA_REQUEST_CREDITS = 10;
+const CREDIT_PACKAGES = [50, 100, 200];
 
 function badRequest(message) {
   const error = new Error(message);
@@ -64,7 +68,7 @@ function deadline(value) {
   }
   return value;
 }
-function listingInput(body = {}) {
+function listingInput(body = {}, { editing = false } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw badRequest('The listing information could not be read.');
   const listingType = choice(body.listingType, ['sell', 'rent'], 'listing type');
   return {
@@ -73,7 +77,8 @@ function listingInput(body = {}) {
     condition: choice(body.condition, CONDITIONS, 'condition'), description: text(body.description, 'Description', 1000),
     listingType, price: listingType === 'sell' ? money(body.price, 'Price') : undefined,
     rentalPrice: listingType === 'rent' ? money(body.rentalPrice, 'Daily rental price') : undefined,
-    clientRequestId: requestKey(body.clientRequestId), photo: photo(body.photo)
+    ...(!editing ? { clientRequestId: requestKey(body.clientRequestId) } : {}),
+    ...(!editing || body.photo !== undefined ? { photo: photo(body.photo) } : {})
   };
 }
 function outfitRequestInput(body = {}) {
@@ -85,4 +90,4 @@ function outfitRequestInput(body = {}) {
     clientRequestId: requestKey(body.clientRequestId)
   };
 }
-module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, badRequest, listingInput, outfitRequestInput, singaporeToday, photo, money, text, choice };
+module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, FREE_REQUESTS, EXTRA_REQUEST_CREDITS, CREDIT_PACKAGES, badRequest, listingInput, outfitRequestInput, singaporeToday, photo, money, text, choice };

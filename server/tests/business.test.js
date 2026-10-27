@@ -71,10 +71,11 @@ test('Business portal', { skip: !process.env.TEST_MONGODB_URI && 'set TEST_MONGO
   });
 
   await t.test('coins: free listings, extra listing cost, buying, boosting, and not overspending', async () => {
-    for (let i = 0; i < 4; i++) await api('shop', 'POST', '/business/products', product({ name: `Tee ${i}`, style: 'Formal', price: 20 }));
+    for (let i = 0; i < 19; i++) await api('shop', 'POST', '/business/products', product({ name: `Tee ${i}`, style: 'Formal', price: 20 }));
     let wallet = await api('shop', 'GET', '/business/coins');
-    assert.equal(wallet.body.coins, 100, 'first 5 listings are free');
-    const sixth = await api('shop', 'POST', '/business/products', product({ name: 'Sixth' }));
+    assert.equal(wallet.body.coins, 100, 'first 20 listings are free');
+    assert.equal(wallet.body.freeListings, 20);
+    const sixth = await api('shop', 'POST', '/business/products', product({ name: 'Twenty-first' }));
     assert.equal(sixth.body.coins, 90);
     const boosted = await api('shop', 'POST', `/business/products/${sixth.body.product.productId}/boost`);
     assert.equal(boosted.body.coins, 70);

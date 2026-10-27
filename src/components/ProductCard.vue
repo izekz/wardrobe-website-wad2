@@ -1,10 +1,11 @@
 <script>
 // One business product in the Discover grid.
 import { money, savedIds, toggleSaved } from '../services/catalogApi'
+import '../assets/styles/discover.css'
 import CommunityIcon from './CommunityIcon.vue'
 export default {
   components: { CommunityIcon },
-  props: { product: { type: Object, required: true } },
+  props: { product: { type: Object, required: true }, destination: { type: Object, default: null } },
   data() { return { saved: savedIds().has(this.product.productId) } },
   computed: {
     promoted() { return this.product.premium || this.product.boosted },
@@ -15,7 +16,7 @@ export default {
 </script>
 <template>
   <article class="disc-card">
-    <RouterLink :to="{ name: 'discover-product', params: { productId: product.productId } }">
+    <RouterLink :to="destination || { name: 'discover-product', params: { productId: product.productId } }">
       <div class="disc-card-image">
         <img :src="product.imageURL" :alt="product.name" loading="lazy" />
         <span v-if="promoted" class="community-tag yellow disc-card-label" title="This business promoted this item">PROMOTED</span>

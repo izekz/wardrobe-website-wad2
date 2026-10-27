@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { badRequest, singaporeToday } = require('../communityValidation');
 const rules = require('../businessValidation');
+const { listedColours } = require('../services/listedColours');
 
 const defaultModels = {
   Business: require('../models/Business'),
@@ -64,6 +65,7 @@ function productJson(doc) {
     productId: String(doc._id), businessId: doc.businessId, businessName: doc.businessName,
     name: doc.name, price: doc.price, style: doc.style, category: doc.category,
     occasions: doc.occasions, sizes: doc.sizes, stock: doc.stock, description: doc.description,
+    availableColours: listedColours(doc),
     status: doc.status, boosted: doc.boosted, boostedUntil: doc.boostedUntil || null,
     premium: doc.premium, premiumUntil: doc.premiumUntil || null, views: doc.views,
     imageURL: `/api/catalog/products/${doc._id}/image`, createdAt: doc.createdAt
@@ -189,7 +191,7 @@ function createBusinessController(models = defaultModels) {
     const business = await myBusiness(req);
     const transactions = await CoinTransaction.find({ businessId: String(business._id) }).sort({ timestamp: -1 }).limit(50);
     res.json({
-      coins: business.coins, costs: rules.COIN_COSTS, packages: rules.COIN_PACKAGES, promotionDays: rules.PROMOTION_DAYS,
+      coins: business.coins, costs: rules.COIN_COSTS, packages: rules.COIN_PACKAGES, promotionDays: rules.PROMOTION_DAYS, freeListings: rules.FREE_LISTINGS,
       transactions: transactions.map(t => ({ transactionId: String(t._id), type: t.type, amount: t.amount, balanceAfter: t.balanceAfter, note: t.note, productId: t.productId, timestamp: t.timestamp }))
     });
   }
@@ -231,7 +233,7 @@ function createBusinessController(models = defaultModels) {
     const [products, skips, recentRequests] = await Promise.all([
       Product.find({ businessId }),
       SkipFeedback.find({ businessId }),
-      Request.find({ createdAt: { $gte: since } })
+      Request.find({ createdAt: { $gte: since }, deletedAt: null })
     ]);
 
     const totalViews = products.reduce((sum, p) => sum + (p.views || 0), 0);
@@ -297,12 +299,34 @@ function createBusinessController(models = defaultModels) {
   // ---------- Request board (reads Person 3's outfit requests) ----------
   async function getRequests(req, res) {
     const business = await myBusiness(req);
-    const filter = { status: 'open', deadline: { $gte: singaporeToday() } };
+    // The business inbox has two distinct lists:
+    //   open    — requests awaiting this business's first suggestion
+    //   replied — every non-deleted request this business has responded to,
+    //             including requests later accepted, closed or expired.
+    // Omitted tab retains the old all-active-requests API for other callers.
+    const tab = queryText(req.query.tab, 12);
+    if (tab && !['open', 'replied'].includes(tab)) throw badRequest('Choose an available request tab.');
+    const filter = { deletedAt: null };
+    if (tab !== 'replied') {
+      filter.status = 'open';
+      filter.deadline = { $gte: singaporeToday() };
+    }
     const style = queryText(req.query.style);
     if (style) filter.preferredStyle = style;
     else if (req.query.myStyles === 'true') filter.preferredStyle = { $in: business.styles };
     const search = queryText(req.query.search);
     if (search) filter.title = { $regex: escapeRegex(search), $options: 'i' };
+
+    if (tab) {
+      // Query by the business that SENT the reply, not merely the request's
+      // current status. A customer accepting a suggestion closes the request,
+      // but it must remain available in this business's Replied history.
+      const mine = await Response.find({ businessId: String(business._id) });
+      const repliedIds = [...new Set(mine.map(response => String(response.requestId)))];
+      filter._id = tab === 'replied'
+        ? { $in: repliedIds }
+        : { $nin: repliedIds };
+    }
     const page = pageNumber(req.query.page), pageSize = 12;
     const [items, total] = await Promise.all([
       Request.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * pageSize).limit(pageSize),
@@ -314,8 +338,12 @@ function createBusinessController(models = defaultModels) {
       requests: items.map(item => {
         const forThis = replies.filter(r => String(r.requestId) === String(item._id));
         return {
-          ...requestJson(item), responseCount: forThis.length,
-          myResponses: forThis.filter(r => r.businessId === String(business._id)).map(r => ({ productId: r.productId, productName: r.productName, message: r.message }))
+          ...requestJson(item),
+          acceptedResponseId: item.acceptedResponseId ? String(item.acceptedResponseId) : null,
+          responseCount: forThis.length,
+          myResponses: forThis.filter(r => r.businessId === String(business._id)).map(r => ({
+            responseId: String(r._id), productId: r.productId, productName: r.productName, message: r.message
+          }))
         };
       })
     });
@@ -326,10 +354,10 @@ function createBusinessController(models = defaultModels) {
     if (!idIsValid(req.params.id)) throw failure(404, 'Request not found.');
     const request = await Request.findById(req.params.id);
     if (!request) throw failure(404, 'Request not found.');
-    if (request.status !== 'open' || request.deadline < singaporeToday()) throw badRequest('This request is no longer open.');
+    if (request.deletedAt || request.status !== 'open' || request.deadline < singaporeToday()) throw badRequest('This request is no longer open.');
     const input = rules.responseInput(req.body);
     if (!idIsValid(input.productId)) throw badRequest('Choose one of your products.');
-    const product = await Product.findOne({ _id: input.productId, businessId: String(business._id), status: 'active' });
+    const product = await Product.findOne({ _id: input.productId, businessId: String(business._id), status: 'active', stock: { $gt: 0 } });
     if (!product) throw badRequest('Choose one of your products that is showing in the store.');
     if (await Response.findOne({ requestId: request._id, businessId: String(business._id), productId: String(product._id) })) {
       throw failure(409, 'You have already suggested this product for this request.');
@@ -351,9 +379,15 @@ function createBusinessController(models = defaultModels) {
     return { preferredStyles: user.preferredStyles || [], activities: user.activities || [], budget: user.budget || null };
   }
 
+    
   async function getCatalog(req, res) {
     await expirePromotions();
     const filter = { status: 'active' };
+    const storefrontId = queryText(req.query.businessId, 50);
+    if (storefrontId) {
+      if (!idIsValid(storefrontId)) throw badRequest('Choose a valid business.');
+      filter.businessId = storefrontId;
+    }
     for (const field of ['style', 'category']) {
       const value = queryText(req.query[field]);
       if (value) filter[field] = value;
@@ -393,7 +427,37 @@ function createBusinessController(models = defaultModels) {
     ]);
     res.json({ products: items.map(product => ({ ...productJson(product), reasons: matchFor(product, prefs).reasons })), total, page, pageSize, personalised: false, preferences: prefs });
   }
+  async function getCatalogBusiness(req, res) {
+    if (!idIsValid(req.params.id)) {
+      throw failure(404, 'Business not found.');
+    }
 
+    const business = await Business.findById(req.params.id);
+
+    if (!business) {
+      throw failure(404, 'Business not found.');
+    }
+
+    const {
+      businessId,
+      businessName,
+      description,
+      styles,
+      contact,
+      logoURL
+    } = businessJson(business);
+
+    res.json({
+      business: {
+        businessId,
+        businessName,
+        description,
+        styles,
+        contact,
+        logoURL
+      }
+    });
+  }
   async function getCatalogProduct(req, res) {
     if (!idIsValid(req.params.id)) throw failure(404, 'Product not found.');
     const product = await Product.findOne({ _id: req.params.id, status: 'active' });
@@ -447,7 +511,7 @@ function createBusinessController(models = defaultModels) {
     getProfile, saveProfile, getMyProducts, getMyProduct, createProduct, updateProduct, deleteProduct,
     getWallet, purchaseCoins, boostProduct: promote('boost'), premiumProduct: promote('premium'),
     getDashboard, getRequests, respondToRequest,
-    getCatalog, getCatalogProduct, skipProduct, getProductImage, getBusinessLogo
+    getCatalog, getCatalogBusiness, getCatalogProduct, skipProduct, getProductImage, getBusinessLogo
   };
 }
 

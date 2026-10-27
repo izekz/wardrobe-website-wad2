@@ -3,7 +3,8 @@ const { CATEGORIES, STYLES, badRequest, photo, money, text, choice } = require('
 // Person 4: checks for the business portal forms. Reuses the Community helpers.
 const COIN_COSTS = { boost: 20, 'extra-listing': 10, premium: 30 };
 const COIN_PACKAGES = [100, 250, 500];
-const FREE_LISTINGS = 5;
+// Products a business can list for free. Each one after that costs COIN_COSTS['extra-listing'] coins.
+const FREE_LISTINGS = 20;
 const PROMOTION_DAYS = 7;
 
 function objectBody(body, label) {
