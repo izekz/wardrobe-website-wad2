@@ -191,7 +191,7 @@ function createBusinessController(models = defaultModels) {
     const business = await myBusiness(req);
     const transactions = await CoinTransaction.find({ businessId: String(business._id) }).sort({ timestamp: -1 }).limit(50);
     res.json({
-      coins: business.coins, costs: rules.COIN_COSTS, packages: rules.COIN_PACKAGES, promotionDays: rules.PROMOTION_DAYS,
+      coins: business.coins, costs: rules.COIN_COSTS, packages: rules.COIN_PACKAGES, promotionDays: rules.PROMOTION_DAYS, freeListings: rules.FREE_LISTINGS,
       transactions: transactions.map(t => ({ transactionId: String(t._id), type: t.type, amount: t.amount, balanceAfter: t.balanceAfter, note: t.note, productId: t.productId, timestamp: t.timestamp }))
     });
   }

@@ -8,6 +8,8 @@ const schema = new mongoose.Schema({
   preferredStyles: [{ type: String, enum: ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy'] }],
   activities: [{ type: String, enum: ['University', 'Presentation', 'Date', 'Internship / work', 'Casual outings', 'Formal events'] }],
   budget: { type: Number, min: 10, max: 100, default: 40 },
-  surveyCompleted: { type: Boolean, default: false }
+  surveyCompleted: { type: Boolean, default: false },
+  // Customer credits: pay for open outfit requests beyond the free allowance (see communityValidation.js).
+  credits: { type: Number, min: 0, default: 0 }
 }, { timestamps: true, collection: 'users' });
 module.exports = mongoose.models.User || mongoose.model('User', schema);

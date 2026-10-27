@@ -6,10 +6,15 @@ import { authState } from '../../services/authService'
 const blankRequest = () => ({ title: '', occasion: '', budget: '', preferredStyle: '', deadline: '', description: '' })
 export default {
   components: { CommunityIcon, RequestCard },
-  data() { return { requests: [], total: 0, page: 1, pageSize: 12, loading: false, loadVersion: 0,
+  data() { return { requests: [], total: 0, page: 1, pageSize: 12, loading: false, loadVersion: 0, wallet: null, buying: false, creditNotice: '',
     error: '', formError: '', posting: false, styles, form: blankRequest(),
     refreshError: '', deletingId: '', deleteError: '', filters: { search: '', style: '', status: '' }, clientRequestId: crypto.randomUUID() } },
-  computed: { canPost() { return ['consumer', 'customer'].includes(authState.user?.role) }, minimumDate() { return today() } },
+  computed: {
+    canPost() { return ['consumer', 'customer'].includes(authState.user?.role) }, minimumDate() { return today() },
+    // Credits: the first few open requests are free, each one after that costs credits.
+    freeLeft() { return this.wallet ? Math.max(0, this.wallet.freeRequests - this.wallet.openCount) : 1 },
+    canAfford() { return this.freeLeft > 0 || this.wallet.credits >= this.wallet.extraRequestCost },
+  },
   mounted() {
     this.loadRequests()
     window.addEventListener('focus', this.refresh)
@@ -34,6 +39,7 @@ export default {
         const result = await communityApi(`/requests?${queryString(filters)}`)
         if (version !== this.loadVersion) return
         this.requests = result.requests; this.total = result.total; this.page = result.page; this.pageSize = result.pageSize
+        if (result.wallet) this.wallet = result.wallet
       } catch (error) { if (version === this.loadVersion) { if (quiet) this.refreshError = error.message; else this.error = error.message } }
       finally { if (version === this.loadVersion) this.loading = false }
     },
@@ -47,6 +53,15 @@ export default {
         await this.loadRequests(nextPage)
       } catch (error) { this.deleteError = error.message }
       finally { this.deletingId = '' }
+    },
+    async buyCredits(credits) {
+      if (this.buying) return
+      this.buying = true; this.formError = ''; this.creditNotice = ''
+      try {
+        this.wallet = await communityApi('/credits/purchase', { method: 'POST', body: JSON.stringify({ credits }) })
+        this.creditNotice = `Added ${credits} credits (demo payment).`
+      } catch (error) { this.formError = error.message }
+      finally { this.buying = false }
     },
     async postRequest() {
       if (this.posting || !this.$refs.requestForm.reportValidity()) return
@@ -90,6 +105,13 @@ export default {
       </div>
       <form v-if="canPost" ref="requestForm" class="request-create-panel" @submit.prevent="postRequest" @input="markChanged" @change="markChanged" :aria-busy="posting">
         <h2>Post a request</h2><p class="request-create-intro">Tell the community what you’re looking for and find a piece that feels like you.</p>
+        <div v-if="wallet" class="request-create-intro" role="status">
+          <p class="mb-1">{{ freeLeft ? `${freeLeft} of ${wallet.freeRequests} free open requests left.` : `You’ve used your ${wallet.freeRequests} free open requests. Each extra one costs ${wallet.extraRequestCost} credits.` }} <strong>You have {{ wallet.credits }} credits.</strong></p>
+          <p v-if="!freeLeft" class="mb-1">Buy credits (demo payment):
+            <button v-for="pack in wallet.packages" :key="pack" type="button" class="community-text-button" :disabled="buying" @click="buyCredits(pack)">{{ pack }}</button>
+          </p>
+          <p v-if="creditNotice" class="mb-1">{{ creditNotice }}</p>
+        </div>
         <fieldset :disabled="posting" class="border-0 p-0 m-0">
           <div class="request-field"><label for="request-title" class="form-label">Looking for <span aria-hidden="true">*</span></label><input id="request-title" ref="requestTitle" v-model.trim="form.title" class="form-control" required maxlength="100" placeholder="e.g. dress, jacket, jeans, shoes" /></div>
           <div class="request-field"><label for="request-occasion" class="form-label">Occasion <span aria-hidden="true">*</span></label><input id="request-occasion" v-model.trim="form.occasion" class="form-control" list="occasion-choices" required maxlength="80" placeholder="Choose or enter an occasion" /><datalist id="occasion-choices"><option>University presentation</option><option>Interview</option><option>Wedding</option><option>Date</option><option>Casual outing</option></datalist></div>
@@ -98,7 +120,7 @@ export default {
           <div class="request-field"><label for="request-deadline" class="form-label">Needed by <span aria-hidden="true">*</span></label><input id="request-deadline" v-model="form.deadline" type="date" class="form-control" :min="minimumDate" required /></div>
           <div class="request-field"><label for="request-description" class="form-label">Additional details <span aria-hidden="true">*</span></label><textarea id="request-description" v-model.trim="form.description" class="form-control" rows="3" maxlength="1000" required placeholder="Add any specific details (e.g. colour, size, brand preferences)."></textarea></div>
           <p v-if="formError" class="community-error" role="alert">{{ formError }}</p>
-          <button class="community-btn w-100" :disabled="posting">{{ posting ? 'Posting…' : 'Post request' }}</button>
+          <button class="community-btn w-100" :disabled="posting || (wallet && !canAfford)">{{ posting ? 'Posting…' : freeLeft ? 'Post request' : `Post request · ${wallet.extraRequestCost} credits` }}</button>
         </fieldset>
       </form>
     </div>

@@ -7,7 +7,7 @@ const PAGE_SIZE = 6
 export default {
   components: { BusinessIcon, CommunityFloral },
   data() {
-    return { products: [], freeListings: 5, extraListingCost: 10, loading: true, error: '', notice: '', needsProfile: false, busy: '', openMenu: '',
+    return { products: [], freeListings: 20, extraListingCost: 10, loading: true, error: '', notice: '', needsProfile: false, busy: '', openMenu: '',
       categories, filters: { search: '', category: '', availability: '', sort: 'updated' }, page: 1 }
   },
   computed: {

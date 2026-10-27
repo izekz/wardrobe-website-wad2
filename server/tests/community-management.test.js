@@ -76,7 +76,8 @@ test('Signed-in Community ownership and request history', async t => {
   });
   await t.test('All requests sorts every open result ahead of closed results across pages and profiles', async () => {
     await api(`/requests/${request.requestId}/status`, { method: 'PATCH', body: { status: 'closed' } });
-    for (let i = 0; i < 13; i++) await api('/requests', { method: 'POST', body: requestInput({ title: `Older open request ${i}` }) });
+    // Inserted directly: only the first 5 open requests are free through the API, and paging needs 13.
+    for (let i = 0; i < 13; i++) await models.Request.create({ ...requestInput({ title: `Older open request ${i}` }), consumerId: String(alice._id), consumerName: alice.name });
     const closed = models.Request.rows.find(row => String(row._id) === request.requestId);
     closed.createdAt = new Date('2100-01-01');
     const first = (await api('/requests')).body.requests, second = (await api('/requests?page=2')).body.requests;
@@ -87,6 +88,28 @@ test('Signed-in Community ownership and request history', async t => {
     closed.deadline = '2000-01-01';
     assert.equal((await api(`/requests/${request.requestId}/status`, { method: 'PATCH', body: { status: 'open' } })).status, 400);
     assert.equal((await api(`/requests/${request.requestId}`)).body.request.status, 'closed');
+  });
+  await t.test('5 open requests are free, then each extra one costs credits', async () => {
+    const post = title => api('/requests', { method: 'POST', body: requestInput({ title }), actor: 'bob' });
+    const free = [];
+    for (let i = 0; i < 5; i++) { const saved = await post(`Free ${i}`); assert.equal(saved.status, 201); free.push(saved.body.request.requestId); }
+    let wallet = (await api('/requests?mine=true', { actor: 'bob' })).body.wallet;
+    assert.deepEqual([wallet.openCount, wallet.freeRequests, wallet.credits, wallet.extraRequestCost], [5, 5, 0, 10]);
+    const blocked = await post('Sixth without credits');
+    assert.equal(blocked.status, 409); assert.match(blocked.body.message, /costs 10 credits/);
+    assert.equal((await api('/credits/purchase', { method: 'POST', body: { credits: 7 }, actor: 'bob' })).status, 400);
+    assert.equal((await api('/credits/purchase', { method: 'POST', body: { credits: 50 }, actor: 'bob' })).body.credits, 50);
+    const sixth = await post('Sixth with credits');
+    assert.equal(sixth.status, 201); assert.equal(sixth.body.creditsSpent, 10);
+    assert.equal((await api('/credits', { actor: 'bob' })).body.credits, 40);
+    // Closing one frees a slot again, so the next one is free; reopening the closed one is then charged.
+    const closeId = sixth.body.request.requestId;
+    await api(`/requests/${closeId}/status`, { method: 'PATCH', body: { status: 'closed' }, actor: 'bob' });
+    await api(`/requests/${free[0]}/status`, { method: 'PATCH', body: { status: 'closed' }, actor: 'bob' });
+    assert.equal((await post('Free again')).body.creditsSpent, 0);
+    assert.equal((await api(`/requests/${closeId}/status`, { method: 'PATCH', body: { status: 'open' }, actor: 'bob' })).status, 200);
+    assert.equal((await api('/credits', { actor: 'bob' })).body.credits, 30);
+    assert.equal((await api('/credits', { actor: 'business' })).status, 403);
   });
   await t.test('Deletes, invalid origins and business/customer permissions are enforced on the server', async () => {
     assert.equal((await api(`/listings/${sale.listingId}`, { method: 'DELETE', actor: null })).status, 401);

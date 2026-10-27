@@ -41,6 +41,51 @@ function requestJson(doc) {
 
 function createCommunityController(models = defaultModels) {
   const { Listing, Request, Response, User, Product } = models;
+  const { FREE_REQUESTS, EXTRA_REQUEST_CREDITS, CREDIT_PACKAGES } = validation;
+
+  // ---------- Credits: the first few open requests are free, each one after that costs credits ----------
+  // Requests past their needed-by date no longer use up a free slot.
+  function openRequestCount(consumerId) {
+    return Request.countDocuments({ consumerId, deletedAt: null, status: 'open', deadline: { $gte: validation.singaporeToday() } });
+  }
+  async function creditBalance(consumerId) {
+    const user = idIsValid(consumerId) ? await User.findById(consumerId) : null;
+    return user?.credits ?? 0;
+  }
+  async function walletJson(consumerId) {
+    const [credits, openCount] = await Promise.all([creditBalance(consumerId), openRequestCount(consumerId)]);
+    return { credits, openCount, freeRequests: FREE_REQUESTS, extraRequestCost: EXTRA_REQUEST_CREDITS, packages: CREDIT_PACKAGES };
+  }
+  // Returns how many credits were taken (0 while the customer is inside the free allowance).
+  async function chargeForExtraRequest(consumerId) {
+    if (await openRequestCount(consumerId) < FREE_REQUESTS) return 0;
+    const updated = idIsValid(consumerId) && await User.findOneAndUpdate({ _id: consumerId, credits: { $gte: EXTRA_REQUEST_CREDITS } },
+      { $inc: { credits: -EXTRA_REQUEST_CREDITS } }, { returnDocument: 'after' });
+    if (!updated) {
+      const error = new Error(`You've used your ${FREE_REQUESTS} free open requests. Another one costs ${EXTRA_REQUEST_CREDITS} credits. Buy credits, or close a request first.`);
+      error.status = 409;
+      throw error;
+    }
+    return EXTRA_REQUEST_CREDITS;
+  }
+  async function refundCredits(consumerId, amount) {
+    if (amount) await User.updateOne({ _id: consumerId }, { $inc: { credits: amount } });
+  }
+
+  async function getCredits(req, res) {
+    res.set('Cache-Control', 'no-store');
+    res.json(await walletJson(req.communityActor.id));
+  }
+
+  // Simulated payment for the demo, like the business coins: no card details, the balance is simply topped up.
+  async function purchaseCredits(req, res) {
+    const amount = req.body?.credits;
+    if (!CREDIT_PACKAGES.includes(amount)) throw validation.badRequest('Choose one of the credit packages.');
+    const id = req.communityActor.id;
+    const updated = idIsValid(id) && await User.findOneAndUpdate({ _id: id }, { $inc: { credits: amount } }, { returnDocument: 'after' });
+    if (!updated) return res.status(404).json({ message: 'Sign in with a customer account to buy credits.' });
+    res.json(await walletJson(id));
+  }
 
   async function requestSummaries(items) {
     const replies = items.length ? await Response.find({ requestId: { $in: items.map(item => item._id) } }).select('requestId createdAt') : [];
@@ -110,8 +155,13 @@ function createCommunityController(models = defaultModels) {
       if (existing.deadline < validation.singaporeToday()) throw validation.badRequest('This request is past its needed-by date. Post a new request instead.');
       filter.deadline = { $gte: validation.singaporeToday() };
     }
+    // Reopening a closed request takes a slot again, so it is charged like a new one.
+    const charged = status === 'open' && existing.status !== 'open' ? await chargeForExtraRequest(req.communityActor.id) : 0;
     const item = await Request.findOneAndUpdate(filter, { $set: { status, acceptedResponseId: null, acceptedAt: null } }, { returnDocument: 'after', runValidators: true });
-    if (!item) return res.status(409).json({ message: 'The request changed. Refresh and try again.' });
+    if (!item) {
+      await refundCredits(req.communityActor.id, charged);
+      return res.status(409).json({ message: 'The request changed. Refresh and try again.' });
+    }
     res.json({ request: requestJson(item) });
   }
 
@@ -220,10 +270,12 @@ function createCommunityController(models = defaultModels) {
     const status = cleanQuery(req.query.status);
     if (status && !['open', 'closed'].includes(status)) throw validation.badRequest('Choose open or closed requests.');
     if (status) filter.status = status;
+    let mine = null;
     if (req.query.mine === 'true') {
       const actor = actorFor(req);
       if (!actor) return res.status(401).json({ message: 'Sign in to see your requests.' });
       filter.consumerId = actor.id;
+      mine = actor.id;
     }
     const pageText = cleanQuery(req.query.page, 8) || '1';
     if (!/^[1-9]\d{0,4}$/.test(pageText)) throw validation.badRequest('Choose a valid page.');
@@ -234,7 +286,7 @@ function createCommunityController(models = defaultModels) {
       Request.countDocuments(filter)
     ]);
     res.set('Cache-Control', 'no-store');
-    res.json({ requests: await requestSummaries(items), total, page, pageSize });
+    res.json({ requests: await requestSummaries(items), total, page, pageSize, ...(mine ? { wallet: await walletJson(mine) } : {}) });
   }
 
   async function createRequest(req, res) {
@@ -242,10 +294,12 @@ function createCommunityController(models = defaultModels) {
     const key = { consumerId: actor.id, clientRequestId: input.clientRequestId };
     const existing = await Request.findOne(key);
     if (existing) return res.json({ request: requestJson(existing) });
+    const charged = await chargeForExtraRequest(actor.id);
     try {
       const item = await Request.create({ ...input, consumerId: actor.id, consumerName: actor.name });
-      res.status(201).json({ request: requestJson(item) });
+      res.status(201).json({ request: requestJson(item), creditsSpent: charged });
     } catch (error) {
+      await refundCredits(actor.id, charged);
       if (error.code !== 11000) throw error;
       const saved = await Request.findOne(key);
       if (!saved) throw error;
@@ -277,7 +331,7 @@ function createCommunityController(models = defaultModels) {
     })) });
   }
 
-  return { getSession, getListings, createListing, getListingImage, getListing, getRequests, createRequest, getRequest,
+  return { getSession, getCredits, purchaseCredits, getListings, createListing, getListingImage, getListing, getRequests, createRequest, getRequest,
     getMyListings, updateListing, setListingStatus, deleteListing, setRequestStatus, deleteRequest, getMember };
 }
 
