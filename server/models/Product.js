@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { CATEGORIES, STYLES, MAX_PHOTO_BYTES } = require('../communityValidation');
+const { COLOURS } = require('../services/wardrobeValidation');
 
 // Person 4 writes store products. Person 1's Store and Product Detail pages read them.
 const schema = new mongoose.Schema({
@@ -9,6 +10,11 @@ const schema = new mongoose.Schema({
   price: { type: Number, required: true, min: 0, max: 100000 },
   style: { type: String, enum: STYLES, required: true },
   category: { type: String, enum: CATEGORIES, required: true },
+  // Optional at schema level so older listings can still be read/promoted.
+  // Product forms and request validation require both when creating or editing.
+  colours: { type: [{ type: String, enum: COLOURS }], default: undefined },
+  colour: { type: String, enum: COLOURS }, // Legacy single-colour products remain readable.
+  material: { type: String, trim: true, maxlength: 50 },
   occasions: [{ type: String, trim: true, maxlength: 40 }],
   sizes: [{ type: String, trim: true, maxlength: 20 }],
   stock: { type: Number, required: true, min: 0, max: 100000 },

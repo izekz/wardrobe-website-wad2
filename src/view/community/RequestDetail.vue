@@ -16,7 +16,7 @@ export default {
   methods: {
     money, readableDate, today,
     productRoute(reply) { return { name: 'discover-product', params: { productId: reply.productId }, query: { requestId: this.item.requestId, responseId: reply.responseId } } },
-    checkoutRoute(responseId) { return { name: 'community-request-checkout', params: { requestId: this.item.requestId, responseId } } },
+    checkoutRoute(responseId) { return { name: 'community-request-checkout', params: { requestId: this.item.requestId, responseId }, query: typeof this.$route.query.colour === 'string' ? { colour: this.$route.query.colour } : {} } },
     refresh() { if (!document.hidden && !this.loading && !this.changing) this.loadRequest(true) },
     async changeStatus() {
       if (this.changing || !this.isOwner || this.item.fulfilled) return

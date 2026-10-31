@@ -1,5 +1,7 @@
 const { CATEGORIES, STYLES, badRequest, photo, money, text, choice } = require('./communityValidation');
 
+const { COLOURS } = require('./services/wardrobeValidation');
+
 // Person 4: checks for the business portal forms. Reuses the Community helpers.
 const COIN_COSTS = { boost: 20, 'extra-listing': 10, premium: 30 };
 const COIN_PACKAGES = [100, 250, 500];
@@ -41,11 +43,19 @@ function profileInput(body) {
 function productInput(body, { photoRequired }) {
   objectBody(body, 'product');
   if (photoRequired && !body.photo) throw badRequest('Please choose a product photo.');
+  // Accept the old single-colour payload while storing the offered colours consistently.
+  const offered = body.colours === undefined ? (body.colour ? [body.colour] : []) : body.colours;
+  if (!Array.isArray(offered) || !offered.length || offered.length > COLOURS.length || offered.some(colour => !COLOURS.includes(colour)))
+    throw badRequest('Choose at least one valid product colour.');
+  const colours = [...new Set(offered)];
   return {
     name: text(body.name, 'Product name', 80),
     price: money(body.price, 'Price'),
     style: choice(body.style, STYLES, 'style'),
     category: choice(body.category, CATEGORIES, 'category'),
+    colours,
+    colour: colours.length === 1 ? colours[0] : undefined,
+    material: text(body.material, 'Material', 50),
     occasions: textList(body.occasions, 'occasion', 8, 40),
     sizes: textList(body.sizes, 'size', 12, 20),
     stock: wholeNumber(body.stock, 'Stock', 100000),

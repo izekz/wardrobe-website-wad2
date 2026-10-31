@@ -33,7 +33,8 @@ export default {
         const sizes = this.reply.product?.sizes || []
         this.form.size = sizes.length === 1 ? sizes[0] : ''
         // A listed colour is part of the item, not an arbitrary customer choice.
-        this.form.colour = this.availableColours.length === 1 ? this.availableColours[0] : ''
+        const selectedColour = this.$route.query.colour
+        this.form.colour = this.availableColours.includes(selectedColour) ? selectedColour : this.availableColours.length === 1 ? this.availableColours[0] : ''
       } catch (error) { if (version === this.loadVersion) this.error = error.message }
       finally { if (version === this.loadVersion) this.loading = false }
     },

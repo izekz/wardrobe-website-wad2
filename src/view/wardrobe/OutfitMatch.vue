@@ -33,6 +33,9 @@ const occasion = ref("Presentation"),
 const productId = computed(() =>
   typeof route.query.productId === "string" ? route.query.productId : undefined,
 );
+const productColour = computed(() =>
+  typeof route.query.colour === "string" ? route.query.colour : undefined,
+);
 const candidates = computed(() =>
   [...items.value, ...(product.value ? [product.value] : [])].sort((a, b) =>
     (b.recommendation?.priority || 0) - (a.recommendation?.priority || 0) ||
@@ -116,7 +119,7 @@ async function assess() {
         date: date.value,
         style: style.value,
         itemIds: [...selectedIds.value],
-        ...(selectedProduct.value ? { productId: productId.value } : {}),
+        ...(selectedProduct.value ? { productId: productId.value, productColour: productColour.value } : {}),
       }),
     );
     if (version === scoreRequest) selection.value = result.selection;
@@ -142,6 +145,7 @@ async function generate() {
         date: date.value,
         style: style.value,
         productId: productId.value,
+        productColour: productColour.value,
       }),
     );
     if (version !== generation) return;
@@ -218,7 +222,7 @@ async function save() {
         occasion: occasion.value,
         date: date.value,
         itemIds: [...selectedIds.value],
-        ...(selectedProduct.value ? { productId: productId.value } : {}),
+        ...(selectedProduct.value ? { productId: productId.value, productColour: productColour.value } : {}),
       }),
     );
     await router.push({ name: "saved-outfits" });
@@ -233,7 +237,7 @@ onMounted(async () => {
   await generate();
   loading.value = false;
 });
-watch([occasion, date, style, productId], (values, previous) => {
+watch([occasion, date, style, productId, productColour], (values, previous) => {
   if (values[3] !== previous[3]) selectedProduct.value = false;
   if (initialized.value) generate();
 });

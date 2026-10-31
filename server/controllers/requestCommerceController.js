@@ -79,7 +79,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       if (req.body.expectedPrice !== product.price) throw fail(409, 'The price has changed. Refresh this page and review the new total before confirming.');
       const clothing = wardrobeValidation.itemInput({
         name: product.name, category: product.category, style: [product.style],
-        colour: req.body?.colour, material: 'Not specified', // The product schema has no material field; customers must not invent one at checkout.
+        colour: req.body?.colour, material: product.material || 'Not specified', // Use the seller's metadata; older listings remain unknown.
       }, false);
       if (!product.photo?.data) throw fail(409, 'This product is missing its photo. Ask the business to update it.');
       const purchaseId = new mongoose.Types.ObjectId();

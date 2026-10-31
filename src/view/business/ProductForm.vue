@@ -1,11 +1,12 @@
 <script>
 import { businessApi, sendJson, readPhoto, categories, styles, occasions } from '../../services/businessApi'
+import { colours } from '../../services/wardrobeService'
 import { refreshBusiness } from '../../services/businessStore'
 import BusinessIcon from '../../components/BusinessIcon.vue'
-const blank = () => ({ name: '', price: '', style: '', category: '', occasions: [], sizes: '', stock: '', description: '', status: 'active' })
+const blank = () => ({ name: '', price: '', style: '', category: '', colours: [], material: '', occasions: [], sizes: '', stock: '', description: '', status: 'active' })
 export default {
   components: { BusinessIcon },
-  data() { return { categories, styles, occasions, form: blank(), photo: '', photoPreview: '', loading: false, saving: false, error: '' } },
+  data() { return { categories, colours, styles, occasions, form: blank(), photo: '', photoPreview: '', loading: false, saving: false, error: '' } },
   computed: {
     productId() { return this.$route.params.productId },
     editing() { return Boolean(this.productId) },
@@ -18,7 +19,7 @@ export default {
       this.loading = true
       try {
         const { product } = await businessApi(`/products/${encodeURIComponent(this.productId)}`)
-        this.form = { name: product.name, price: product.price, style: product.style, category: product.category, occasions: [...product.occasions],
+        this.form = { name: product.name, price: product.price, style: product.style, category: product.category, colours: [...(product.colours?.length ? product.colours : product.availableColours?.length ? product.availableColours : product.colour ? [product.colour] : [])], material: product.material || '', occasions: [...product.occasions],
           sizes: product.sizes.join(', '), stock: product.stock, description: product.description, status: product.status }
         this.photoPreview = product.imageURL
       } catch (error) { this.error = error.message }
@@ -33,6 +34,7 @@ export default {
     },
     async save() {
       if (this.saving || !this.$refs.form.reportValidity()) return
+      if (!this.form.colours.length) { this.error = 'Choose at least one available colour.'; return }
       if (!this.form.occasions.length) { this.error = 'Choose at least one occasion.'; return }
       if (!this.editing && !this.photo) { this.error = 'Please choose a product photo.'; return }
       this.saving = true; this.error = ''
@@ -69,6 +71,20 @@ export default {
               <div class="col-sm-6 biz-field"><label for="product-stock" class="form-label">Stock <span aria-hidden="true">*</span></label><input id="product-stock" v-model="form.stock" type="number" class="form-control" min="0" max="100000" step="1" required /></div>
               <div class="col-sm-6 biz-field"><label for="product-style" class="form-label">Style <span aria-hidden="true">*</span></label><select id="product-style" v-model="form.style" class="form-select" required><option disabled value="">Select a style</option><option v-for="style in styles" :key="style">{{ style }}</option></select></div>
               <div class="col-sm-6 biz-field"><label for="product-category" class="form-label">Category <span aria-hidden="true">*</span></label><select id="product-category" v-model="form.category" class="form-select" required><option disabled value="">Select a category</option><option v-for="category in categories" :key="category">{{ category }}</option></select></div>
+              <fieldset class="col-12 biz-field">
+                <legend class="form-label">Available colours <span aria-hidden="true">*</span></legend>
+                <p class="biz-muted small">Choose at least one. Customers choose one of these colours at checkout.</p>
+                <div class="biz-chip-group">
+                  <label v-for="(colour, index) in colours" :key="colour" class="biz-chip">
+                    <input v-model="form.colours" type="checkbox" :value="colour" :required="index === 0 && !form.colours.length" />
+                    <span>{{ colour }}</span>
+                  </label>
+                </div>
+              </fieldset>
+              <div class="col-sm-6 biz-field">
+                <label for="product-material" class="form-label">Material <span aria-hidden="true">*</span></label>
+                <input id="product-material" v-model.trim="form.material" class="form-control" required maxlength="50" placeholder="e.g. Cotton, linen, denim" />
+              </div>
             </div>
             <fieldset class="biz-field"><legend class="form-label">Occasions <span aria-hidden="true">*</span></legend>
               <div class="biz-chip-group"><label v-for="occasion in occasions" :key="occasion" class="biz-chip"><input v-model="form.occasions" type="checkbox" :value="occasion" /> <span>{{ occasion }}</span></label></div></fieldset>

@@ -7,8 +7,9 @@ import RequestSuggestionAction from '../../components/RequestSuggestionAction.vu
 import SkipFeedback from '../../components/SkipFeedback.vue'
 export default {
   components: { CommunityIcon, SkipFeedback, RequestSuggestionAction },
-  data() { return { product: null, business: null, loading: true, error: '', size: '', saved: false, skipping: false, toast: '', loadVersion: 0 } },
+  data() { return { product: null, business: null, loading: true, error: '', size: '', colour: '', saved: false, skipping: false, toast: '', loadVersion: 0 } },
   computed: {
+    availableColours() { return this.product?.availableColours || this.product?.colours || (this.product?.colour ? [this.product.colour] : []) },
     isShopper() { return authState.user?.role === 'consumer' },
     isSuggestion() { return typeof this.$route.query.requestId === 'string' && typeof this.$route.query.responseId === 'string' },
     // Person 2's "Style it with my wardrobe" page, once it exists in the router.
@@ -19,18 +20,23 @@ export default {
     money,
     async load() {
       const version = ++this.loadVersion
-      this.loading = true; this.error = ''; this.product = null; this.size = ''
+      this.loading = true; this.error = ''; this.product = null; this.size = ''; this.colour = ''
       try {
         const result = await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`)
         if (version !== this.loadVersion) return
         this.product = result.product; this.business = result.business
         this.saved = savedIds().has(this.product.productId)
+        const selectedColour = this.$route.query.colour
+        this.colour = this.availableColours.includes(selectedColour) ? selectedColour : this.availableColours.length === 1 ? this.availableColours[0] : ''
         if (this.product.sizes.length === 1) this.size = this.product.sizes[0]
       } catch (error) { if (version === this.loadVersion) this.error = error.message }
       finally { if (version === this.loadVersion) this.loading = false }
     },
     save() { this.saved = toggleSaved(this.product.productId); this.flash(this.saved ? 'Saved to your list.' : 'Removed from your list.') },
-    styleWithWardrobe() { this.$router.push({ name: this.wardrobeRoute.name, query: { productId: this.product.productId } }) },
+    styleWithWardrobe() {
+      if (this.availableColours.length && !this.colour) { this.flash('Choose a colour first.'); this.$refs.colourInput?.focus(); return }
+      this.$router.push({ name: this.wardrobeRoute.name, query: { productId: this.product.productId, ...(this.colour ? { colour: this.colour } : {}) } })
+    },
     flash(message) { this.toast = message; clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => { this.toast = '' }, 2600) },
     async skipped() {
       this.skipping = false
@@ -72,6 +78,15 @@ export default {
         <div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span v-for="occasion in product.occasions" :key="occasion" class="community-tag lilac">{{ occasion }}</span></div>
         <p class="disc-detail-desc">{{ product.description }}</p>
 
+        <div v-if="availableColours.length" class="mb-3">
+          <label for="detail-colour" class="form-label" style="font-weight:600">Colour</label>
+          <select id="detail-colour" ref="colourInput" v-model="colour" class="form-select" required>
+            <option disabled value="">Choose a colour</option>
+            <option v-for="option in availableColours" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </div>
+        <p v-else class="community-muted small">The business has not specified available colours for this product.</p>
+
         <fieldset v-if="!isSuggestion">
           <legend class="form-label mb-0" style="font-weight:600">Size</legend>
           <div class="disc-sizes"><button v-for="item in product.sizes" :key="item" type="button" :class="{ selected: size === item }" :aria-pressed="size === item" @click="size = item">{{ item }}</button></div>
@@ -79,7 +94,7 @@ export default {
         <p v-if="product.stock === 0" class="community-error">Out of stock right now.</p>
         <p v-else-if="product.stock <= 3" class="community-muted small">Only {{ product.stock }} left.</p>
 
-        <RequestSuggestionAction :product="product" />
+        <RequestSuggestionAction :product="product" :selected-colour="colour" />
         <div class="disc-actions mt-3">
           <button v-if="wardrobeRoute" type="button" class="community-btn" @click="styleWithWardrobe"><CommunityIcon name="hanger" :size="22" /> Style with my wardrobe</button>
           <button v-else type="button" class="community-btn" disabled title="My wardrobe is coming soon"><CommunityIcon name="hanger" :size="22" /> Style with my wardrobe (coming soon)</button>

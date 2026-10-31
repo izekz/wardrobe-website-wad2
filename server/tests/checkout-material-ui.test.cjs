@@ -15,7 +15,7 @@ test('checkout chooses size and listing-based colour without asking customer for
 })
 
 test('checkout backend never trusts a customer-entered material', () => {
-  assert.match(controller, /material: 'Not specified'/)
+  assert.match(controller, /material: product\.material \|\| 'Not specified'/)
   assert.doesNotMatch(controller, /req\.body\?\.material/)
   assert.match(checkout, /purchase\.material !== 'Not specified'/)
 })

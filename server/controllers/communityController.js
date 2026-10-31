@@ -325,6 +325,7 @@ function createCommunityController(models = defaultModels) {
         if (!p || p.businessId !== reply.businessId) return null;
         return { productId: String(p._id), businessName: p.businessName, name: p.name, price: p.price,
           category: p.category, style: p.style, sizes: p.sizes, occasions: p.occasions, stock: p.stock,
+          colours: listedColours(p), material: p.material || null,
           availableColours: listedColours(p),
           imageURL: `/api/catalog/products/${p._id}/image`, reasons: [p.price <= item.budget ? 'Within your budget' : 'Above your budget'] };
       })()

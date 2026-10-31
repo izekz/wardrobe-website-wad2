@@ -54,13 +54,13 @@ test('Request suggestions, owner controls and demo checkout', async t => {
   };
   let productId, requestId, responseId, receipt;
   const responsePath = () => `/community/requests/${requestId}/responses/${responseId}`;
-  const checkout = { size: 'M', colour: 'Beige', expectedPrice: 38 };
+  const checkout = { size: 'M', colour: 'Black', expectedPrice: 38, material: 'Forged fabric' };
 
   await t.test('Business creates a product; customer posts; business replies with a clickable product and counted suggestion', async () => {
     const profile = await api('/business/profile', 'seller', 'PUT', { businessName: 'Minimalist Studio', description: 'Everyday pieces.', styles: ['Minimalist'], contact: 'studio@example.test', logo: png });
     assert.equal(profile.status, 201);
     const product = await api('/business/products', 'seller', 'POST', { name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist', stock: 3,
-      occasions: ['Presentation'], sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.', photo: png });
+      colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'], sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.', photo: png });
     assert.equal(product.status, 201); productId = product.body.product.productId;
     requestId = await postRequest();
     const reply = await api(`/business/requests/${requestId}/responses`, 'seller', 'POST', { productId, message: 'This fits your presentation and budget.' });
@@ -72,7 +72,7 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.match(detail.body.responses[0].product.imageURL, /\/api\/catalog\/products\/.+\/image/);
     assert.equal(detail.body.responses[0].product.style, 'Minimalist');
     assert.deepEqual(detail.body.responses[0].product.sizes, ['S', 'M', 'L']);
-    assert.deepEqual(detail.body.responses[0].product.availableColours, ['Beige']);
+    assert.deepEqual(detail.body.responses[0].product.availableColours, ['Beige', 'Black']);
   });
   await t.test('My requests and status filters are applied in the database with suggestion counts', async () => {
     const bobs = await postRequest('bob', 'Jamie request');
@@ -101,7 +101,9 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.equal((await api(`/community/requests/${requestId}/status`, 'alice', 'PATCH', { status: 'open' })).status, 409);
   });
   await t.test('Validation and price changes never reduce stock or create wardrobe items', async () => {
-    for (const body of [{ ...checkout, size: 'XXL' }, { ...checkout, colour: 'Made up' }, { ...checkout, colour: 'Black' }, { ...checkout, expectedPrice: 1 }]) {
+    assert.equal((await api(responsePath() + '/purchase', 'alice', 'POST', { ...checkout, colour: 'Red' })).status, 400);
+    assert.equal((await api(responsePath() + '/purchase', 'alice', 'POST', { ...checkout, colour: ['Beige', 'Black'] })).status, 400);
+    for (const body of [{ ...checkout, size: 'XXL' }, { ...checkout, colour: 'Made up' }, { ...checkout, colour: 'Red' }, { ...checkout, expectedPrice: 1 }]) {
       const failed = await api(responsePath() + '/purchase', 'alice', 'POST', body);
       assert.ok([400, 409].includes(failed.status));
     }
@@ -127,10 +129,10 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.equal(await models.Item.countDocuments({ userId: String(alice._id) }), 1);
     const wardrobe = await api('/wardrobe/items');
     assert.equal(wardrobe.body.items[0].itemId, receipt.wardrobeItemId);
-    assert.equal(wardrobe.body.items[0].colour, 'Beige');
+    assert.equal(wardrobe.body.items[0].colour, 'Black');
     assert.equal(wardrobe.body.items[0].size, 'M');
-    assert.equal(wardrobe.body.items[0].material, 'Not specified', 'checkout never invents the material');
-    assert.equal(receipt.material, 'Not specified');
+    assert.equal(wardrobe.body.items[0].material, 'Cotton', 'checkout copies the seller material');
+    assert.equal(receipt.material, 'Cotton');
     assert.equal((await api(`/wardrobe/items/${receipt.wardrobeItemId}/image`)).status, 200);
     assert.equal((await api(`/wardrobe/items/${receipt.wardrobeItemId}/image`, 'bob')).status, 404);
   });

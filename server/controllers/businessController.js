@@ -61,11 +61,13 @@ function businessJson(doc) {
   };
 }
 function productJson(doc) {
+  const colours = listedColours(doc);
   return {
     productId: String(doc._id), businessId: doc.businessId, businessName: doc.businessName,
     name: doc.name, price: doc.price, style: doc.style, category: doc.category,
     occasions: doc.occasions, sizes: doc.sizes, stock: doc.stock, description: doc.description,
-    availableColours: listedColours(doc),
+    colours, colour: colours.length === 1 ? colours[0] : null, material: doc.material || null,
+    availableColours: colours,
     status: doc.status, boosted: doc.boosted, boostedUntil: doc.boostedUntil || null,
     premium: doc.premium, premiumUntil: doc.premiumUntil || null, views: doc.views,
     imageURL: `/api/catalog/products/${doc._id}/image`, createdAt: doc.createdAt

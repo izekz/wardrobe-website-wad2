@@ -7,7 +7,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { createBusinessRouter, createCatalogRouter, defaultModels } = require('../routes/business');
 const png = `data:image/png;base64,${'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='}`;
-const product = (changes = {}) => ({ name: 'Beige structured blazer', price: 38, style: 'Minimalist', category: 'Jackets',
+const product = (changes = {}) => ({ name: 'Beige structured blazer', price: 38, style: 'Minimalist', category: 'Jackets', colour: 'Beige', material: 'Cotton',
   occasions: ['Presentation', 'Interview'], sizes: ['S', 'M', 'L'], stock: 12, description: 'Light, smart-casual blazer.', photo: png, ...changes });
 
 test('Business portal', { skip: !process.env.TEST_MONGODB_URI && 'set TEST_MONGODB_URI to run' }, async t => {

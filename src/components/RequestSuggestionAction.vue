@@ -2,14 +2,14 @@
 import { authState } from '../services/authService'
 import { communityApi, money, today } from '../services/communityApi'
 export default {
-  props: { product: { type: Object, required: true } },
+  props: { product: { type: Object, required: true }, selectedColour: { type: String, default: '' } },
   data() { return { request: null, reply: null, loading: false, busy: false, error: '', loadVersion: 0 } },
   computed: {
     hasContext() { return typeof this.$route.query.requestId === 'string' && typeof this.$route.query.responseId === 'string' },
     isOwner() { return this.request?.consumerId === authState.user?.id },
     isOpen() { return this.request?.status === 'open' && this.request.deadline >= today() && this.product.stock > 0 },
     isAccepted() { return this.request?.status === 'closed' && this.request.acceptedResponseId === this.reply?.responseId && !this.request.fulfilled },
-    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId } } },
+    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId }, query: this.selectedColour ? { colour: this.selectedColour } : {} } },
   },
   watch: { '$route.fullPath': { immediate: true, handler() { this.load() } } },
   beforeUnmount() { this.loadVersion++ },
@@ -34,7 +34,7 @@ export default {
       this.busy = true; this.error = ''
       try {
         await communityApi(`/requests/${this.request.requestId}/responses/${this.reply.responseId}/accept`, { method: 'POST', body: '{}' })
-        await this.$router.push({ name: 'community-request', params: { requestId: this.request.requestId }, query: { accepted: '1' } })
+        await this.$router.push({ name: 'community-request', params: { requestId: this.request.requestId }, query: { accepted: '1', ...(this.selectedColour ? { colour: this.selectedColour } : {}) } })
       } catch (error) { this.error = error.message }
       finally { this.busy = false }
     },
