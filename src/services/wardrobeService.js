@@ -30,6 +30,7 @@ export const styles = [
   "Formal",
   "Smart casual",
   "Classic",
+  "Romantic",
   "Preppy",
   "Streetwear",
   "Vintage",

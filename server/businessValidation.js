@@ -61,7 +61,8 @@ function productInput(body, { photoRequired }) {
     stock: wholeNumber(body.stock, 'Stock', 100000),
     description: text(body.description, 'Description', 1000),
     status: body.status === undefined ? 'active' : choice(body.status, ['active', 'hidden'], 'status'),
-    photo: body.photo ? photo(body.photo) : undefined
+    photo: body.photo ? photo(body.photo) : undefined,
+    sizePhoto: body.sizePhoto ? photo(body.sizePhoto) : undefined
   };
 }
 

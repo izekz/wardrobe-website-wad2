@@ -29,6 +29,10 @@ const schema = new mongoose.Schema({
   photo: {
     data: { type: Buffer, required: true, select: false, validate: value => value.length <= MAX_PHOTO_BYTES },
     contentType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp'], required: true }
+  },
+  sizePhoto: {
+    data: { type: Buffer, select: false, validate: value => !value || value.length <= MAX_PHOTO_BYTES },
+    contentType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp'] }
   }
 }, { timestamps: true, collection: 'products' });
 schema.index({ businessId: 1, createdAt: -1 });

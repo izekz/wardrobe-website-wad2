@@ -1,6 +1,6 @@
 import { authState } from './authService'
 export const categories = ['Tops', 'Bottoms', 'Jackets', 'Dresses', 'Shoes', 'Accessories']
-export const styles = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy']
+export const styles = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic']
 export const conditions = ['New', 'Like new', 'Good', 'Fair']
 
 // No database password belongs in frontend code. Vite forwards /api to Express.

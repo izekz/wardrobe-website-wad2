@@ -1,4 +1,4 @@
-import StyleSurvey from '../view/discover/StyleSurvery.vue'
+import StyleSurvey from '../view/discover/StyleSurvey.vue'
 
 export default [
   {

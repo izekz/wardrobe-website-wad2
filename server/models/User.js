@@ -5,8 +5,8 @@ const schema = new mongoose.Schema({
   passwordHash: { type: String, required: true, select: false },
   role: { type: String, enum: ['consumer', 'business', 'admin'], default: 'consumer' },
   suspended: { type: Boolean, default: false },
-  preferredStyles: [{ type: String, enum: ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy'] }],
-  activities: [{ type: String, enum: ['University', 'Presentation', 'Date', 'Internship / work', 'Casual outings', 'Formal events'] }],
+  preferredStyles: [{ type: String, enum: ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic', 'Formal', 'Casual'] }],
+  activities: [{ type: String, enum: ['University', 'Presentation', 'Interview', 'Date', 'Internship / work', 'Casual outings', 'Formal events'] }],
   budget: { type: Number, min: 10, max: 100, default: 40 },
   surveyCompleted: { type: Boolean, default: false },
   // Customer credits: pay for open outfit requests beyond the free allowance (see communityValidation.js).
