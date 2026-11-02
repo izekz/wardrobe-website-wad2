@@ -1,4 +1,4 @@
-const { inferSuitability } = require("./clothingSuitability");
+const { inferSuitability, normalizeOccasion } = require("./clothingSuitability");
 const {
   text,
   choice,
@@ -33,24 +33,21 @@ const COLOURS = [
 ];
 const STYLES = [
   "Minimalist",
-  "Casual",
-  "Formal",
-  "Smart casual",
-  "Classic",
-  "Preppy",
   "Streetwear",
   "Vintage",
   "Y2K",
-  "Cosplay",
+  "Preppy",
+  "Classic",
+  "Romantic"
 ];
 const OCCASIONS = [
-  "Presentation",
-  "Date",
-  "Interview",
-  "Casual outing",
-  "Formal dinner",
-  "Work",
   "University",
+  "Presentation",
+  "Interview",
+  "Date",
+  "Internship / work",
+  "Casual outings",
+  "Formal events"
 ];
 const WEATHER = ["Warm", "Rainy", "Cool"];
 function tags(value, options, label) {
@@ -63,13 +60,17 @@ function tags(value, options, label) {
     throw badRequest(`Choose at least one valid ${label}.`);
   return [...new Set(value)];
 }
-function itemInput(body = {}, requirePhoto = true) {
+function occasionInput(value) {
+  return choice(normalizeOccasion(value), OCCASIONS, "occasion");
+}
+function itemInput(body = {}, requirePhoto = true, { allowLegacyStyles = false } = {}) {
   const result = {
     name: text(body.name, "Item name", 80),
     category: choice(body.category, CATEGORIES, "category"),
     colour: choice(body.colour, COLOURS, "colour"),
     material: text(body.material, "Material", 50),
-    style: tags(body.style, STYLES, "style"),
+    // Only trusted legacy checkout conversion may carry retired product styles.
+    style: tags(body.style, allowLegacyStyles ? [...STYLES, "Casual", "Formal", "Smart casual", "Cosplay"] : STYLES, "style"),
   };
   Object.assign(result, inferSuitability(result));
   if (requirePhoto || body.photo !== undefined)
@@ -99,6 +100,7 @@ module.exports = {
   WEATHER,
   itemInput,
   dateInput,
+  occasionInput,
   choice,
   text,
   badRequest,

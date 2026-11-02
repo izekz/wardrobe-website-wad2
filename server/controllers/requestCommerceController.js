@@ -80,7 +80,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       const clothing = wardrobeValidation.itemInput({
         name: product.name, category: product.category, style: [product.style],
         colour: req.body?.colour, material: product.material || 'Not specified', // Use the seller's metadata; older listings remain unknown.
-      }, false);
+      }, false, { allowLegacyStyles: true });
       if (!product.photo?.data) throw fail(409, 'This product is missing its photo. Ask the business to update it.');
       const purchaseId = new mongoose.Types.ObjectId();
       const claimed = await Request.findOneAndUpdate({ ...ids(req), status: 'closed', deletedAt: null, purchaseId: null,

@@ -183,6 +183,27 @@ test("Private wardrobe HTTP workflows", async (t) => {
       ).body.item;
     },
   );
+  await t.test("current wardrobe styles and all seven dressing types work through the API", async () => {
+    const { STYLES, OCCASIONS } = require("../services/wardrobeValidation");
+    for (const style of STYLES) {
+      const edited = await api("/items/" + top.itemId, "PUT", input({ style: [style] }));
+      assert.equal(edited.status, 200);
+      assert.deepEqual(edited.body.item.style, [style]);
+    }
+    for (const retired of ["Casual", "Formal", "Smart casual", "Cosplay"])
+      assert.equal((await api("/items", "POST", input({ style: [retired] }))).status, 400);
+    for (const occasion of OCCASIONS) {
+      const result = await api("/recommendations", "POST", { occasion, style: "Romantic" });
+      assert.equal(result.status, 200);
+      assert.ok(result.body.plans.length);
+      const selection = await api("/selection", "POST", { occasion, style: "Romantic", itemIds: [top.itemId] });
+      assert.equal(selection.status, 200);
+      assert.ok(Number.isFinite(selection.body.selection.matchScore));
+    }
+    assert.equal((await api("/recommendations", "POST", { occasion: "Work", style: "Classic" })).status, 200);
+    assert.equal((await api("/recommendations", "POST", { occasion: "Formal events", style: "Cosplay" })).status, 400);
+    await api("/items/" + top.itemId, "PUT", input());
+  });
   await t.test(
     "existing wardrobe records ignore legacy manual suitability labels",
     async () => {
@@ -305,7 +326,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
       assert.ok(otherOccasion.body.items.every(item => item.recommendation.kind === "style" && item.recommendation.label === "Matches your style"));
       const otherStyle = await api("/recommendations", "POST", {
         occasion: "Presentation",
-        style: "Formal",
+        style: "Classic",
       });
       assert.deepEqual(
         [...otherStyle.body.recommendedIds].sort(),
@@ -313,7 +334,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
       );
       const neither = await api("/recommendations", "POST", {
         occasion: "Interview",
-        style: "Formal",
+        style: "Classic",
       });
       assert.deepEqual(neither.body.recommendedIds, []);
     },
@@ -787,4 +808,37 @@ test("basic-piece completion is independent of match quality and accessories are
   );
   assert.deepEqual(dress.basics, { selected: 2, total: 2, percent: 100 });
   assert.equal(dress.complete, true);
+});
+
+test("wardrobe taxonomy, Romantic scoring and legacy compatibility use current dressing labels", () => {
+  const { STYLES, OCCASIONS, itemInput, occasionInput } = require("../services/wardrobeValidation");
+  const { inferSuitability } = require("../services/clothingSuitability");
+  const { occasionRating, assessSelection, recommendationFor } = require("../services/outfitMatching");
+  assert.deepEqual(STYLES, ["Minimalist", "Streetwear", "Vintage", "Y2K", "Preppy", "Classic", "Romantic"]);
+  assert.deepEqual(OCCASIONS, ["University", "Presentation", "Interview", "Date", "Internship / work", "Casual outings", "Formal events"]);
+  const romantic = { name: "Silk dress", category: "Dresses", colour: "Pink", material: "Silk", style: ["Romantic"] };
+  assert.equal(occasionRating(romantic, "Date").components[0].earned, 30);
+  assert.equal(occasionRating(romantic, "Interview").components[0].earned, 6);
+  assert.equal(occasionRating(romantic, "Formal events").components[0].earned, 27);
+  assert.equal(recommendationFor(romantic, { occasion: "Date" }).kind, "occasion");
+  assert.equal(recommendationFor(romantic, { occasion: "Interview", styles: ["Romantic"] }).kind, "style");
+  for (const occasion of OCCASIONS) for (const style of STYLES) {
+    const selected = assessSelection([{ ...romantic, style: [style] }], occasion, [], weather);
+    assert.ok(selected.matchScore >= 5 && selected.matchScore <= 100);
+    assert.deepEqual(selected.scoreDetails.components.map(c => c.weight), [60, 25, 15]);
+    for (const comment of selected.comments)
+      assert.doesNotMatch(comment.text, /smart.casual|cosplay|formal pieces|casual pieces/i);
+  }
+  const inferred = inferSuitability(romantic);
+  assert.ok(inferred.occasions.includes("Date") && inferred.occasions.includes("Formal events"));
+  assert.ok(inferred.occasions.every(value => OCCASIONS.includes(value)));
+  for (const [old, current] of [["Work", "Internship / work"], ["Casual outing", "Casual outings"], ["Formal dinner", "Formal events"]]) {
+    assert.equal(occasionInput(old), current);
+    assert.deepEqual(occasionRating(romantic, old), occasionRating(romantic, current));
+    assert.ok(assessSelection([romantic], old, [], weather));
+  }
+  const legacy = { ...romantic, style: ["Formal"] };
+  assert.equal(occasionRating(legacy, "Interview").components[0].earned, 30);
+  assert.throws(() => itemInput(legacy, false));
+  assert.doesNotThrow(() => itemInput(legacy, false, { allowLegacyStyles: true }));
 });

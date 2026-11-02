@@ -131,7 +131,7 @@ function createWardrobeController(
   }
   async function plan(req, res) {
     const date = v.dateInput(req.body?.date),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion"),
+      occasion = v.occasionInput(req.body?.occasion),
       lockedIds = req.body?.lockedIds || [];
     if (
       !Array.isArray(lockedIds) ||
@@ -184,7 +184,7 @@ function createWardrobeController(
   }
   async function selection(req, res) {
     const date = v.dateInput(req.body?.date),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion");
+      occasion = v.occasionInput(req.body?.occasion);
     const ids = req.body?.itemIds;
     if (
       !Array.isArray(ids) ||
@@ -217,7 +217,7 @@ function createWardrobeController(
 
   async function save(req, res) {
     const name = v.text(req.body?.name, "Outfit name", 80),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion"),
+      occasion = v.occasionInput(req.body?.occasion),
       eventDate = v.dateInput(req.body?.date),
       ids = req.body.itemIds;
     if (
