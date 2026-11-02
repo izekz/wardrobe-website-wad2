@@ -1655,3 +1655,20 @@
   .wd-studio-field { grid-template-columns: minmax(0, 1fr); }
   .wd-studio-field > svg { display: none; }
 }
+
+/* Saved outfit photos retain body order without individual cards or labels. */
+.wd-saved-board { --saved-row: 104px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; }
+.wd-saved-board.has-extras { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.wd-saved-board-main, .wd-saved-board-side { display: grid; grid-auto-rows: var(--saved-row); align-content: start; gap: 8px; min-width: 0; }
+.wd-saved-board-main { grid-template-rows: repeat(3, var(--saved-row)); }
+.wd-saved-piece { min-width: 0; min-height: 0; display: flex; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.wd-saved-board-main > .wd-saved-piece.is-dress { grid-row: span 2; }
+.wd-saved-photo { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; min-width: 0; background: transparent; }
+.wd-saved-photo > img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; mix-blend-mode: normal; }
+.wd-saved-photo-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px; color: #a385a7; text-align: center; }
+.wd-saved-photo-placeholder > span { font-size: 24px; line-height: 1; }
+.wd-saved-photo-placeholder > small { font-size: 10px; }
+.wd-saved-board-expanded { --saved-row: 210px; margin: 20px 0; border-radius: 16px; background: #f0e8f8; }
+@media (max-width: 540px) {
+  .wd-saved-board-expanded { --saved-row: 185px; padding: 10px; gap: 8px; }
+}

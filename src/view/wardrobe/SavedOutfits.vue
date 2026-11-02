@@ -72,6 +72,16 @@ async function remove() {
     busy.value = false;
   }
 }
+// Use the planner's body order without changing the saved data or original photos.
+function outfitColumns(outfit) {
+  const mainOrder = { Tops: 0, Dresses: 0, Bottoms: 1, Shoes: 2 };
+  const main = outfit.pieces.filter(piece => piece.category in mainOrder)
+    .sort((a, b) => mainOrder[a.category] - mainOrder[b.category]);
+  const sideOrder = { Jackets: 0, Outerwear: 0, Accessories: 1 };
+  const side = outfit.pieces.filter(piece => !(piece.category in mainOrder))
+    .sort((a, b) => (sideOrder[a.category] ?? 2) - (sideOrder[b.category] ?? 2));
+  return [ ...(main.length ? [{ key: "main", pieces: main }] : []), ...(side.length ? [{ key: "side", pieces: side }] : []) ];
+}
 function savedDate(value) {
   return new Date(value).toLocaleDateString("en-SG", {
     day: "numeric",
@@ -144,18 +154,16 @@ onMounted(load);
       :key="outfit.outfitId"
       class="wd-card"
     >
-      <div class="wd-collage" :class="`wd-tone-${index % 4}`">
-        <div
-          v-for="piece in outfit.pieces"
-          :key="piece.itemId || piece.productId"
-        >
-          <img
-            v-if="piece.imageURL"
-            :src="piece.imageURL"
-            :alt="piece.name"
-            loading="lazy"
-            @error="piece.imageURL = null"
-          /><span v-else>✿</span>
+      <div class="wd-saved-board" :class="[`wd-tone-${index % 4}`, { 'has-extras': outfitColumns(outfit).length > 1 }]"
+        role="group" :aria-label="`Outfit preview: ${outfit.name}`">
+        <div v-for="column in outfitColumns(outfit)" :key="column.key" :class="`wd-saved-board-${column.key}`">
+          <figure v-for="piece in column.pieces" :key="piece.itemId || piece.productId" class="wd-saved-piece" :aria-label="piece.name"
+            :class="{ 'is-dress': piece.category === 'Dresses' }">
+            <div class="wd-saved-photo">
+              <img v-if="piece.imageURL" :src="piece.imageURL" :alt="piece.name" loading="lazy" @error="piece.imageURL = null" />
+              <span v-else class="wd-saved-photo-placeholder"><span aria-hidden="true">✿</span><small>Photo unavailable</small></span>
+            </div>
+          </figure>
         </div>
       </div>
       <div class="wd-card-body">
@@ -198,31 +206,20 @@ onMounted(load);
     </button>
     <h2 id="saved-title">{{ selected.name }}</h2>
     <p>{{ selected.occasion }} · Planned for {{ selected.eventDate }}</p>
-    <div class="wd-piece-grid">
-      <article
-        v-for="piece in selected.pieces"
-        :key="piece.itemId || piece.productId"
-      >
-        <img
-          v-if="piece.imageURL"
-          :src="piece.imageURL"
-          :alt="piece.name"
-          @error="piece.imageURL = null"
-        />
-        <h3>{{ piece.name }}</h3>
-        <p>
-          {{
-            piece.missing
-              ? "Removed from wardrobe"
-              : piece.source === "store"
-                ? "Store piece · availability may change"
-                : "In your wardrobe"
-          }}
-        </p>
-      </article>
+    <div class="wd-saved-board wd-saved-board-expanded" :class="{ 'has-extras': outfitColumns(selected).length > 1 }"
+      role="group" :aria-label="`Outfit details: ${selected.name}`">
+      <div v-for="column in outfitColumns(selected)" :key="column.key" :class="`wd-saved-board-${column.key}`">
+        <figure v-for="piece in column.pieces" :key="piece.itemId || piece.productId" class="wd-saved-piece" :aria-label="piece.name"
+          :class="{ 'is-dress': piece.category === 'Dresses' }">
+          <div class="wd-saved-photo">
+            <img v-if="piece.imageURL" :src="piece.imageURL" :alt="piece.name" @error="piece.imageURL = null" />
+            <span v-else class="wd-saved-photo-placeholder"><span aria-hidden="true">✿</span><small>Photo unavailable</small></span>
+          </div>
+        </figure>
+      </div>
     </div>
-    <RouterLink class="community-btn" :to="{ name: 'outfit-match' }"
-      >Plan another combination</RouterLink
+    <RouterLink class="community-btn" :to="{ name: 'outfit-match', query: { outfitId: selected.outfitId } }"
+      >Edit this outfit</RouterLink
     >
   </WardrobeDialog>
   <WardrobeDialog
