@@ -25,7 +25,7 @@ export default {
     <RouterLink v-if="session?.role==='consumer'" :to="{name:'liked-items'}" class="community-icon-button community-count-icon" aria-label="Liked items"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg><span v-if="likedCount" class="community-icon-count">{{likedCount}}</span></RouterLink>
     <RouterLink v-if="session?.role==='consumer'" :to="{name:'cart'}" class="community-icon-button community-count-icon" aria-label="Shopping cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h2l1.7 9.2h9.7L20 8H7"/><circle cx="10" cy="18" r="1.4"/><circle cx="17" cy="18" r="1.4"/></svg><span v-if="cartCount" class="community-icon-count">{{cartCount}}</span></RouterLink>
     <details v-if="session?.role==='consumer'" class="community-account-menu">
-      <summary class="community-avatar community-avatar-menu" aria-label="Open account menu"><span>{{initial}}</span><CommunityIcon name="chevron" :size="15"/></summary>
+      <summary class="community-avatar-menu" aria-label="Open account menu"><span class="community-avatar">{{initial}}</span><CommunityIcon name="chevron" :size="18"/></summary>
       <div class="community-account-popover">
         <RouterLink :to="{name:'profile'}">Profile Page</RouterLink>
         <button type="button" :disabled="signingOut" @click="signOut">{{signingOut?'Signing out…':'Log Out'}}</button>

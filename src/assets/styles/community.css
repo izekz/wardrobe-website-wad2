@@ -23,6 +23,16 @@ body { margin: 0; background: #fffcf8; }
 .community-icon-button { border: 0; padding: 7px; background: transparent; color: #453447; border-radius: 50%; display: inline-grid; place-items: center; }
 .community-icon-button:hover { background: #f9eaf0; }
 .community-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 43px; height: 43px; border-radius: 50%; background: #f8dce5; color: #653447; font-size: 20px; }
+.community-account-menu { position: relative; flex: 0 0 auto; }
+.community-avatar-menu { display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; color: #4b3a4c; cursor: pointer; list-style: none; }
+.community-avatar-menu::-webkit-details-marker { display: none; }
+.community-avatar-menu > .community-avatar { display: inline-grid; place-items: center; width: 46px; height: 46px; background: #f3d9e3; font: 500 19px Georgia, serif; }
+.community-account-popover { position: absolute; right: 0; top: 56px; z-index: 10; min-width: 190px; display: grid; padding: 8px; border: 1px solid #ece4e4; border-radius: 12px; background: #fffdfa; box-shadow: 0 12px 28px #4d26401a; }
+.community-account-menu:not([open]) > .community-account-popover { display: none; }
+.community-account-popover > a, .community-account-popover > button { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer; }
+.community-account-popover > a:hover, .community-account-popover > button:hover, .community-account-popover > a:focus-visible, .community-account-popover > button:focus-visible { background: #f6eff8; }
+.community-account-popover > button { color: #a52c43; }
+.community-account-popover > button:disabled { opacity: .6; cursor: wait; }
 .community-avatar-small { width: 40px; height: 40px; font-size: 16px; background: #f4e6df; }
 .community-demo-label { color: #947287; font-size: 11px; line-height: 1.1; width: 30px; }
 .community-main { position: relative; z-index: 1; padding-bottom: 16px; }
