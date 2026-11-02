@@ -8,9 +8,12 @@ export default {
     initial() { return (this.session?.name || 'Guest').charAt(0).toUpperCase() }, likedCount(){ return likedCount.value }, cartCount(){ return cartCount.value },
     teamNavigation() { const routes=this.$router.getRoutes(); return [{label:'Discover',paths:['/discover','/store']},{label:'My wardrobe',paths:['/wardrobe']},{label:'Outfit planner',paths:['/outfit-planner','/wardrobe/planner']}].map(item=>({...item,target:routes.find(route=>item.paths.includes(route.path))?.path})) }
   },
+  watch: { '$route.fullPath'() { this.accountOpen = false } },
+  mounted() { document.addEventListener('pointerdown', this.closeAccountOnOutsideClick) },
+  beforeUnmount() { document.removeEventListener('pointerdown', this.closeAccountOnOutsideClick) },
   methods: {
-    async signOut(){this.signingOut=true;this.logoutError='';try{await logout();this.$emit('signed-out');await this.$router.push({name:'login'})}catch(error){this.logoutError=error.message}finally{this.signingOut=false}},
-    async focusSearch(){const requests=String(this.$route.name||'').includes('request');const businessRequests=requests&&this.session?.role==='business';await this.$router.push({name:businessRequests?'business-requests':'style-feed'});this.$nextTick(()=>document.getElementById(businessRequests?'request-list-search':'sf-page-title')?.focus())}
+    async signOut(){this.signingOut=true;this.logoutError='';this.accountOpen=false;try{await logout();this.$emit('signed-out');await this.$router.push({name:'login'})}catch(error){this.logoutError=error.message}finally{this.signingOut=false}},
+    closeAccountOnOutsideClick(event){if(this.accountOpen && !this.$refs.accountMenu?.contains(event.target)) this.accountOpen=false}
   }
 }
 </script>
@@ -21,16 +24,17 @@ export default {
   <div class="community-account">
     <RouterLink v-if="session?.mode!=='account'" :to="{name:'login'}">Log in</RouterLink>
     <button v-if="session?.mode==='account' && session?.role!=='consumer'" class="community-text-button" :disabled="signingOut" @click="signOut">{{signingOut?'Signing out…':'Log out'}}</button>
-    <button v-if="!(String($route.name||'').includes('request')&&['customer','consumer'].includes(session?.role))" class="community-icon-button" type="button" aria-label="Search" @click="focusSearch"><CommunityIcon name="search" :size="22"/></button>
     <RouterLink v-if="session?.role==='consumer'" :to="{name:'liked-items'}" class="community-icon-button community-count-icon" aria-label="Liked items"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg><span v-if="likedCount" class="community-icon-count">{{likedCount}}</span></RouterLink>
     <RouterLink v-if="session?.role==='consumer'" :to="{name:'cart'}" class="community-icon-button community-count-icon" aria-label="Shopping cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h2l1.7 9.2h9.7L20 8H7"/><circle cx="10" cy="18" r="1.4"/><circle cx="17" cy="18" r="1.4"/></svg><span v-if="cartCount" class="community-icon-count">{{cartCount}}</span></RouterLink>
-    <details v-if="session?.role==='consumer'" class="community-account-menu">
-      <summary class="community-avatar-menu" aria-label="Open account menu"><span class="community-avatar">{{initial}}</span><CommunityIcon name="chevron" :size="18"/></summary>
-      <div class="community-account-popover">
-        <RouterLink :to="{name:'profile'}">Profile Page</RouterLink>
-        <button type="button" :disabled="signingOut" @click="signOut">{{signingOut?'Signing out…':'Log Out'}}</button>
+    <div v-if="session?.role==='consumer'" ref="accountMenu" class="community-account-menu" @keydown.esc="accountOpen = false">
+      <button type="button" class="community-account-trigger" aria-label="Account menu" :aria-expanded="accountOpen" aria-haspopup="true" @click="accountOpen = !accountOpen">
+        <span class="community-avatar">{{ initial }}</span><CommunityIcon name="chevron" :size="18" />
+      </button>
+      <div v-if="accountOpen" class="community-account-popover">
+        <RouterLink :to="{name:'profile'}" @click="accountOpen = false">Customer profile</RouterLink>
+        <button type="button" :disabled="signingOut" @click="signOut">{{signingOut?'Signing out…':'Log out'}}</button>
       </div>
-    </details>
+    </div>
     <RouterLink v-else-if="session" :to="{name:session?.role==='business'?'business-profile':'profile'}" class="community-avatar" aria-label="Open your profile">{{initial}}</RouterLink>
   </div>
 </div></header>

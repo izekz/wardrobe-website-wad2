@@ -18,10 +18,25 @@ test('customer website link is between Business profile and Log out in the accou
   assert.doesNotMatch(css, /\.biz-customer-menu-link\s*\{\s*display:\s*none/);
 });
 
-test('business request search shortcut opens its actual inbox and focuses the correct input', () => {
+test('customer header no longer offers a misleading site-wide search shortcut', () => {
   const navbar = read('src/components/AppNavbar.vue');
-  assert.match(navbar, /businessRequests\?'business-requests':'style-feed'/);
-  assert.match(navbar, /businessRequests\?'request-list-search':'sf-page-title'/);
+  assert.doesNotMatch(navbar, /aria-label="Search"/);
+  assert.doesNotMatch(navbar, /focusSearch/);
+  // Actual search inputs remain on the pages where they perform a search.
   const inbox = read('src/view/business/CustomerRequest.vue');
   assert.match(inbox, /id="request-list-search"/);
+});
+
+test('customer account menu uses the business-style avatar/dropdown pattern', () => {
+  const navbar = read('src/components/AppNavbar.vue');
+  assert.match(navbar, /class="community-account-trigger"/);
+  assert.match(navbar, /:aria-expanded="accountOpen"/);
+  const dropdown = navbar.slice(navbar.indexOf('class="community-account-popover"'));
+  assert.ok(dropdown.indexOf('Customer profile') >= 0);
+  assert.ok(dropdown.indexOf('Log out') > dropdown.indexOf('Customer profile'));
+  assert.match(navbar, /closeAccountOnOutsideClick/);
+  assert.match(navbar, /@keydown\.esc/);
+  const css = read('src/assets/styles/community.css');
+  assert.match(css, /\.community-account-popover\s*\{/);
+  assert.match(css, /\.community-account-trigger\s*\{/);
 });
