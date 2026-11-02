@@ -8,6 +8,7 @@ const router = useRouter()
 const busy = ref(false)
 const error = ref('')
 const complete = ref(null)
+const cartWarning = ref('')
 const errors = reactive({ name:'', email:'', address:'', postal:'', cardholder:'', cardNumber:'', expiry:'', cvv:'' })
 const form = reactive({ name:'', email:'', address:'', postal:'', cardholder:'', cardNumber:'', expiry:'', cvv:'' })
 const last4 = computed(() => form.cardNumber.replace(/\D/g, '').slice(-4))
@@ -48,6 +49,9 @@ function validateForm(){
   return [validateName(), validateEmail(), validateAddress(), validatePostal(), validateCardholder(), validateCardNumber(), validateExpiry(), validateCvv()].every(Boolean)
 }
 async function submit(){
+  if(!shopState.ready||shopState.loading||shopState.pending){error.value='Wait for your cart to finish loading.';return}
+  if(!shopState.cart.length||shopState.cart.some(item=>!item.available)){error.value='Review your cart and remove unavailable items before checkout.';return}
+  const ownerId = shopState.ownerId
   if (!validateForm()) { error.value = 'Please check the highlighted fields and try again.'; return }
   busy.value = true; error.value = ''
   try {
@@ -56,8 +60,10 @@ async function submit(){
       delivery: { name:form.name, email:form.email, address:form.address, postal:form.postal },
       payment: { method:'demo-card', last4:last4.value, cardholder:form.cardholder }
     })
+    if(shopState.ownerId!==ownerId)return
     complete.value = result.order
-    clearCart()
+    try { await clearCart() }
+    catch (e) { if(e.code!=='ACCOUNT_CHANGED')cartWarning.value='Your order was placed, but your saved cart could not be cleared. Please remove the purchased items from your cart before ordering again.' }
     clearAllErrors()
   } catch (e) {
     error.value = e.message
@@ -69,9 +75,10 @@ async function submit(){
 
 <template>
 <section class="disc-library-page checkout-page">
-  <div v-if="complete" class="checkout-success"><div class="checkout-success-mark">✓</div><p class="community-eyebrow">ORDER CONFIRMED</p><h1>It’s yours.</h1><p>Your order <strong>#{{ complete.orderNumber }}</strong> is confirmed. Your piece has been secured and is on its way to you.</p><RouterLink :to="{name:'discover'}" class="community-btn">Back to Discover</RouterLink></div>
+  <div v-if="complete" class="checkout-success"><div class="checkout-success-mark">✓</div><p class="community-eyebrow">ORDER CONFIRMED</p><h1>It’s yours.</h1><p>Your order <strong>#{{ complete.orderNumber }}</strong> is confirmed. Your piece has been secured and is on its way to you.</p><p v-if="cartWarning" class="community-error" role="alert">{{cartWarning}}</p><RouterLink :to="{name:'discover'}" class="community-btn">Back to Discover</RouterLink></div>
   <template v-else>
     <div class="disc-library-head"><div><h1>Checkout</h1><p>Your final step to securing your new wardrobe additions.</p></div></div>
+    <p v-if="shopState.loading" class="community-loading" role="status">Loading your cart…</p><p v-if="shopState.error" class="community-error" role="alert">{{shopState.error}}</p>
     <form class="checkout-grid" @submit.prevent="submit" novalidate>
       <div class="checkout-form-card">
         <h2>1. Delivery details</h2>
@@ -89,7 +96,7 @@ async function submit(){
           <label>CVV<input v-model="form.cvv" type="password" inputmode="numeric" autocomplete="cc-csc" maxlength="3" @input="formatCvv" @blur="validateCvv" /><small v-if="errors.cvv" class="field-error">{{ errors.cvv }}</small></label>
         </div>
         <p v-if="error" class="community-error" role="alert">{{ error }}</p>
-        <button class="community-btn checkout-pay" :disabled="busy||!shopState.cart.length">{{ busy ? 'Placing order…' : `Pay ${money(cartSubtotal)}` }}</button>
+        <button class="community-btn checkout-pay" :disabled="busy||shopState.loading||shopState.pending>0||!shopState.ready||!shopState.cart.length||shopState.cart.some(item=>!item.available)">{{ busy ? 'Placing order…' : `Pay ${money(cartSubtotal)}` }}</button>
       </div>
       <aside class="disc-order-summary"><h2>Your order</h2><div v-for="item in shopState.cart" :key="item.key" class="checkout-mini-item"><span>{{ item.name }} × {{ item.quantity }}</span><strong>{{ money(item.price * item.quantity) }}</strong></div><hr /><div class="total"><span>Total</span><strong>{{ money(cartSubtotal) }}</strong></div></aside>
     </form>

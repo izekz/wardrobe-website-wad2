@@ -8,6 +8,14 @@ const schema = new mongoose.Schema({
   preferredStyles: [{ type: String, enum: ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic', 'Formal', 'Casual'] }],
   activities: [{ type: String, enum: ['University', 'Presentation', 'Interview', 'Date', 'Internship / work', 'Casual outings', 'Formal events'] }],
   budget: { type: Number, min: 10, max: 100, default: 40 },
+  // Private account-owned shopping state. Never included in publicUser/session JSON.
+  likedProducts: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }], default: [], select: false },
+  cartItems: { type: [new mongoose.Schema({
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    size: { type: String, default: '', maxlength: 20 },
+    colour: { type: String, default: '', maxlength: 20 },
+    quantity: { type: Number, required: true, min: 1, max: 10, validate: Number.isInteger }
+  }, { _id: false })], default: [], select: false },
   surveyCompleted: { type: Boolean, default: false },
   // Customer credits: pay for open outfit requests beyond the free allowance (see communityValidation.js).
   credits: { type: Number, min: 0, default: 0 }
