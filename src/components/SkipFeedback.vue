@@ -33,7 +33,7 @@ export default {
       <p v-if="error" class="community-error" role="alert">{{ error }}</p>
       <div class="disc-modal-actions">
         <button type="button" class="community-btn community-btn-outline" :disabled="sending" @click="$emit('close')">Cancel</button>
-        <button class="community-btn" :disabled="!reason || sending">{{ sending ? 'Sending…' : 'Skip this item' }}</button>
+        <button class="community-btn" :disabled="!reason || sending">{{ sending ? 'Submitting…' : 'Submit' }}</button>
       </div>
     </form>
   </div>

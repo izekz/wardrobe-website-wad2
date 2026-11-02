@@ -1,5 +1,5 @@
 const CATEGORIES = ['Tops', 'Bottoms', 'Jackets', 'Dresses', 'Shoes', 'Accessories'];
-const STYLES = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy'];
+const STYLES = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic', 'Formal', 'Casual'];
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 // Open outfit requests a customer can have for free. Each one after that costs EXTRA_REQUEST_CREDITS credits.

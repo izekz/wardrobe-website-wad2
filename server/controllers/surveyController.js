@@ -1,8 +1,8 @@
 const User = require('../models/User');
 const { publicUser } = require('../services/authSession');
 
-const allowedStyles = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Formal', 'Casual', 'Preppy'];
-const allowedActivities = ['University', 'Presentation', 'Date', 'Internship / work', 'Casual outings', 'Formal events'];
+const allowedStyles = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic'];
+const allowedActivities = ['University', 'Presentation', 'Interview', 'Date', 'Internship / work', 'Casual outings', 'Formal events'];
 
 async function getSurvey(req, res) {
   const user = await User.findById(req.user.id);
@@ -26,8 +26,8 @@ async function saveSurvey(req, res) {
   const activities = Array.isArray(req.body?.activities) ? req.body.activities : [];
   const budget = Number(req.body?.budget);
 
-  if (preferredStyles.length < 1 || preferredStyles.length > 2 || preferredStyles.some(style => !allowedStyles.includes(style))) {
-    return res.status(400).json({ message: 'Choose 1 or 2 valid style preferences.' });
+  if (preferredStyles.length < 2 || preferredStyles.some(style => !allowedStyles.includes(style))) {
+    return res.status(400).json({ message: 'Choose at least 2 valid style preferences.' });
   }
   if (activities.length < 1 || activities.some(activity => !allowedActivities.includes(activity))) {
     return res.status(400).json({ message: 'Choose at least one valid occasion.' });

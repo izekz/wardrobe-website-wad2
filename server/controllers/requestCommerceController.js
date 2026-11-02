@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { singaporeToday } = require('../communityValidation');
 const wardrobeValidation = require('../services/wardrobeValidation');
 const { listedColours } = require('../services/listedColours');
+const { syncProductBoosts } = require('../services/styleBoostAvailability');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function receipt(doc) {
   return {
@@ -12,7 +13,7 @@ function receipt(doc) {
   };
 }
 function createRequestCommerceController(models, transact = work => mongoose.connection.transaction(work)) {
-  const { Request, Response, Product, Item, Purchase } = models;
+  const { Request, Response, Product, Item, Purchase, StyleVideo } = models;
   function ids(req) {
     if (!mongoose.isObjectIdOrHexString(req.params.id) ||
       (req.params.responseId && !mongoose.isObjectIdOrHexString(req.params.responseId))) {
@@ -41,14 +42,38 @@ function createRequestCommerceController(models, transact = work => mongoose.con
   async function accept(req, res) {
     const request = await ownRequest(req);
     if (request.purchaseId) throw fail(409, 'This request already has a completed demo purchase.');
-    assertOpen(request);
+    const switching = request.status === 'closed' && !!request.acceptedResponseId;
+    // The needed-by date ends NEW business replies, not previously offered items.
+    // Otherwise cancelling acceptance after the deadline traps customers: their
+    // request is closed, yet they cannot select any of their existing replies.
+    // A customer may close a request to stop new business replies but still
+    // accept a suggestion already made. The same holds after its deadline.
+    const choosingEarlierOffer = request.status === 'closed' && !request.acceptedResponseId;
+    if (!switching && !choosingEarlierOffer) assertOpen(request);
     await suggestedProduct(req);
-    const updated = await Request.findOneAndUpdate({ ...ids(req), status: 'open', deletedAt: null, purchaseId: null,
-      deadline: { $gte: singaporeToday() } }, {
-      $set: { status: 'closed', acceptedResponseId: req.params.responseId, acceptedAt: new Date() },
+    const selector = switching
+      ? { status: 'closed', acceptedResponseId: request.acceptedResponseId }
+      : choosingEarlierOffer
+        ? { status: 'closed', acceptedResponseId: null, expiredAt: request.expiredAt || null }
+        : { status: 'open', deadline: { $gte: singaporeToday() } };
+    const updated = await Request.findOneAndUpdate({ ...ids(req), ...selector, deletedAt: null, purchaseId: null }, {
+      $set: { status: 'closed', expiredAt: null, acceptedResponseId: req.params.responseId, acceptedAt: new Date() },
     }, { returnDocument: 'after', runValidators: true });
     if (!updated) throw fail(409, 'The request changed. Refresh and try again.');
     res.json({ acceptedResponseId: String(updated.acceptedResponseId), message: 'Suggestion accepted. Your request is now closed. You can still complete the optional demo purchase.' });
+  }
+  async function cancelAcceptance(req, res) {
+    const request = await ownRequest(req);
+    if (request.purchaseId) throw fail(409, 'The demo purchase is already complete.');
+    if (!request.acceptedResponseId) throw fail(409, 'No accepted suggestion to cancel.');
+    const expired = request.deadline < singaporeToday();
+    const updated = await Request.findOneAndUpdate({ ...ids(req), status: 'closed', deletedAt: null,
+      purchaseId: null, acceptedResponseId: request.acceptedResponseId }, {
+      $set: { status: (expired || request.closedByCustomer) ? 'closed' : 'open', acceptedResponseId: null, acceptedAt: null,
+        expiredAt: expired ? new Date() : null },
+    }, { returnDocument: 'after', runValidators: true });
+    if (!updated) throw fail(409, 'Your request changed. Refresh and try again.');
+    res.json({ request: { requestId: String(updated._id), status: updated.status, expired: expired, acceptedResponseId: null } });
   }
   async function getPurchase(req, res) {
     await ownRequest(req);
@@ -72,15 +97,15 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       const size = wardrobeValidation.text(req.body?.size, 'Size', 20);
       if (!product.sizes.includes(size)) throw fail(400, 'Choose a size offered by this business.');
       const offeredColours = listedColours(product);
-      if (offeredColours.length && !offeredColours.includes(req.body?.colour)) {
+      if (offeredColours.length ? !offeredColours.includes(req.body?.colour) : req.body?.colour !== 'Not specified') {
         throw fail(400, 'The chosen colour is not listed for this product. Review the listing and try again.');
       }
       if (typeof req.body?.expectedPrice !== 'number' || !Number.isFinite(req.body.expectedPrice)) throw fail(400, 'Review the current price before confirming.');
       if (req.body.expectedPrice !== product.price) throw fail(409, 'The price has changed. Refresh this page and review the new total before confirming.');
       const clothing = wardrobeValidation.itemInput({
         name: product.name, category: product.category, style: [product.style],
-        colour: req.body?.colour, material: 'Not specified', // The product schema has no material field; customers must not invent one at checkout.
-      }, false);
+        colour: req.body?.colour, material: product.material || 'Not specified', // Use the seller's metadata; older listings remain unknown.
+      }, false, { allowLegacyStyles: true, allowUnknownColour: true });
       if (!product.photo?.data) throw fail(409, 'This product is missing its photo. Ask the business to update it.');
       const purchaseId = new mongoose.Types.ObjectId();
       const claimed = await Request.findOneAndUpdate({ ...ids(req), status: 'closed', deletedAt: null, purchaseId: null,
@@ -90,6 +115,11 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       const stocked = await Product.findOneAndUpdate({ _id: product._id, status: 'active', price: product.price, stock: { $gte: 1 } },
         { $inc: { stock: -1 } }, { returnDocument: 'after', runValidators: true, session });
       if (!stocked) throw fail(409, 'The stock or price changed. Refresh and choose an available item.');
+      // The last-unit purchase pauses prepaid Style Feed promotion in the same
+      // MongoDB transaction as the stock decrement, receipt, and wardrobe item.
+      if (StyleVideo && stocked.stock === 0) {
+        await syncProductBoosts(StyleVideo, product._id, false, { session });
+      }
       const [item] = await Item.create([{ ...clothing, userId: req.communityActor.id, size,
         sourceProductId: String(product._id), purchaseId: String(purchaseId),
         photo: { data: product.photo.data, contentType: product.photo.contentType },
@@ -103,6 +133,6 @@ function createRequestCommerceController(models, transact = work => mongoose.con
     });
     res.status(result.alreadyPurchased ? 200 : 201).json(result);
   }
-  return { accept, getPurchase, purchase };
+  return { accept, cancelAcceptance, getPurchase, purchase };
 }
 module.exports = { createRequestCommerceController };

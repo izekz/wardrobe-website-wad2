@@ -1,4 +1,7 @@
 // Explainable estimates from clothing metadata. No user-supplied occasion/weather labels are trusted.
+function normalizeOccasion(value) {
+  return ({ Work: "Internship / work", "Casual outing": "Casual outings", "Formal dinner": "Formal events" })[value] || value;
+}
 function inferSuitability(item) {
   const style = Array.isArray(item.style)
     ? item.style
@@ -36,8 +39,14 @@ function inferSuitability(item) {
       (category === "Shoes" && /leather/.test(material)));
   const occasions = new Set();
   if (formal || polished || neatMinimal)
-    ["Presentation", "Work", "Date"].forEach((o) => occasions.add(o));
-  if (formal) ["Interview", "Formal dinner"].forEach((o) => occasions.add(o));
+    ["Presentation", "Internship / work", "Date"].forEach((o) => occasions.add(o));
+  if (formal || (has("Classic") && knownFabric && !relaxedFabric))
+    ["Interview", "Formal events"].forEach((o) => occasions.add(o));
+  if (has("Romantic")) {
+    occasions.add("Date");
+    occasions.add("Casual outings");
+    if (knownFabric && !relaxedFabric && ["Dresses", "Tops", "Jackets", "Accessories"].includes(category)) occasions.add("Formal events");
+  }
   if (
     has(
       "Casual",
@@ -50,7 +59,7 @@ function inferSuitability(item) {
     ) ||
     relaxedFabric
   )
-    ["Casual outing", "University", "Date"].forEach((o) => occasions.add(o));
+    ["Casual outings", "University", "Date"].forEach((o) => occasions.add(o));
   const weather = new Set();
   const heavy = /wool|fleece|heavy|thermal|down/.test(material);
   if (heavy || (/leather/.test(material) && category === "Jackets"))
@@ -70,4 +79,4 @@ function inferSuitability(item) {
     weather.add("Rainy");
   return { occasions: [...occasions], weather: [...weather] };
 }
-module.exports = { inferSuitability };
+module.exports = { inferSuitability, normalizeOccasion };

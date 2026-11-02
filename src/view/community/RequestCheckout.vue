@@ -1,16 +1,15 @@
 <script>
-import { communityApi, money, today } from '../../services/communityApi'
-import { colours } from '../../services/wardrobeService'
+import { communityApi, money } from '../../services/communityApi'
 import { authState } from '../../services/authService'
 export default {
 
-  data() { return { request: null, reply: null, purchase: null, loading: true, busy: false, error: '', purchaseError: '', colours,
+  data() { return { request: null, reply: null, purchase: null, loading: true, busy: false, error: '', purchaseError: '',
     form: { size: '', colour: '' }, loadVersion: 0 } },
   computed: {
     product() { return this.reply?.product },
     availableColours() { return this.product?.availableColours || [] },
     canPurchase() { return this.request?.consumerId === authState.user?.id && this.request.status === 'closed' &&
-      this.request.deadline >= today() && this.request.acceptedResponseId === this.reply?.responseId && this.product?.stock > 0 },
+      this.request.acceptedResponseId === this.reply?.responseId && this.product?.stock > 0 },
     requestRoute() { return { name: 'community-request', params: { requestId: this.$route.params.requestId } } },
   },
   watch: { '$route.fullPath': { immediate: true, handler() { this.load() } } },
@@ -24,7 +23,10 @@ export default {
         const id = encodeURIComponent(this.$route.params.requestId)
         const receipt = await communityApi(`/requests/${id}/purchase`)
         if (version !== this.loadVersion) return
-        if (receipt.purchase) { this.purchase = receipt.purchase; return }
+        if (receipt.purchase) {
+          if (receipt.purchase.responseId !== this.$route.params.responseId) throw new Error('This request was purchased with another suggestion. Open the correct receipt from My Outfit Requests.')
+          this.purchase = receipt.purchase; return
+        }
         const data = await communityApi(`/requests/${id}`)
         if (version !== this.loadVersion) return
         this.request = data.request
@@ -33,7 +35,8 @@ export default {
         const sizes = this.reply.product?.sizes || []
         this.form.size = sizes.length === 1 ? sizes[0] : ''
         // A listed colour is part of the item, not an arbitrary customer choice.
-        this.form.colour = this.availableColours.length === 1 ? this.availableColours[0] : ''
+        const selectedColour = this.$route.query.colour
+        this.form.colour = this.availableColours.includes(selectedColour) ? selectedColour : this.availableColours.length === 1 ? this.availableColours[0] : !this.availableColours.length ? 'Not specified' : ''
       } catch (error) { if (version === this.loadVersion) this.error = error.message }
       finally { if (version === this.loadVersion) this.loading = false }
     },
@@ -64,7 +67,7 @@ export default {
       <img :src="`/api/wardrobe/items/${purchase.wardrobeItemId}/image`" :alt="purchase.productName" class="request-checkout-photo mb-4" />
       <h2>{{ purchase.productName }}</h2><p>{{ purchase.businessName }}</p>
       <dl><dt>Demo total</dt><dd>{{ money(purchase.price) }}</dd><dt>Size</dt><dd>{{ purchase.size }}</dd><dt>Colour</dt><dd>{{ purchase.colour }}</dd><template v-if="purchase.material && purchase.material !== 'Not specified'"><dt>Material</dt><dd>{{ purchase.material }}</dd></template></dl>
-      <div class="d-flex flex-wrap gap-3 mt-4"><RouterLink :to="{ name: 'wardrobe', query: { purchased: purchase.wardrobeItemId } }" class="community-btn">View in my wardrobe</RouterLink><RouterLink :to="{ name: 'profile', query: { tab: 'requests' }, hash: '#community-history' }" class="community-btn community-btn-outline">View request history</RouterLink></div>
+      <div class="d-flex flex-wrap gap-3 mt-4"><RouterLink :to="{ name: 'wardrobe', query: { purchased: purchase.wardrobeItemId } }" class="community-btn">View in my wardrobe</RouterLink><RouterLink :to="{ name: 'community-requests' }" class="community-btn community-btn-outline">View request history</RouterLink></div>
     </article>
     <template v-else-if="request && reply">
       <p class="community-eyebrow">YOUR SELECTED SUGGESTION</p><h1>Review your demo purchase</h1>
@@ -89,12 +92,7 @@ export default {
               </select>
             </template>
             <template v-else>
-              <label for="checkout-colour">Colour for your wardrobe</label>
-              <select id="checkout-colour" v-model="form.colour" class="form-select" required>
-                <option disabled value="">Choose the colour shown in the item</option>
-                <option v-for="colour in colours" :key="colour">{{ colour }}</option>
-              </select>
-              <p class="community-muted small">The business hasn't specified a colour. This only records the item's colour in your wardrobe; it does not offer other product colours.</p>
+              <p class="community-muted small">Colour not specified by the seller. You can describe it in your wardrobe later.</p>
             </template>
             <p class="community-muted small">You can edit your wardrobe details later.</p>
             <button type="submit" class="community-btn w-100">{{ busy ? 'Completing purchase…' : 'Confirm demo purchase' }}</button>

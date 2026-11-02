@@ -21,7 +21,7 @@ test('Community and the latest business portal share requests and replies', asyn
     businessName: 'Minimalist Studio', description: 'Everyday clothing', styles: ['Minimalist'], contact: 'studio@example.test', logo: png }) });
   const product = await models.Product.create({ businessId: String(business._id), businessName: business.businessName,
     ...businessRules.productInput({ name: 'Beige jacket', category: 'Jackets', style: 'Minimalist', price: 38,
-      stock: 3, occasions: ['Presentation'], sizes: ['M'], description: 'Light jacket.', photo: png }, { photoRequired: true }) });
+      stock: 3, colour: 'Beige', material: 'Cotton', occasions: ['Presentation'], sizes: ['M'], description: 'Light jacket.', photo: png }, { photoRequired: true }) });
   const app = express();
   const actors = { customer, business: owner };
   app.use(express.json());
@@ -67,7 +67,8 @@ test('Community and the latest business portal share requests and replies', asyn
     assert.equal(reply.status, 400); assert.match(reply.body.message, /no longer open/);
     assert.equal((await api(`/community/requests/${requestId}`)).body.responses.length, 1);
     const history = await api(`/community/members/${customer._id}`, 'business');
-    assert.equal(history.body.requests[0].status, 'closed');
+    assert.equal(history.body.requestTotal, 0, 'business cannot inspect customer private history');
+    assert.deepEqual(history.body.requests, []);
     assert.deepEqual(Object.keys(history.body.member).sort(), ['id', 'name', 'role']);
   });
   await t.test('Reopening restores the same request and preserves its earlier business reply', async () => {

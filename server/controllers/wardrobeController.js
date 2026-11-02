@@ -1,5 +1,6 @@
 const { inferSuitability } = require("../services/clothingSuitability");
 const mongoose = require("mongoose");
+const { listedColours } = require("../services/listedColours");
 const Item = require("../models/WardrobeItem"),
   Outfit = require("../models/SavedOutfit"),
   Product = require("../models/Product");
@@ -41,7 +42,7 @@ function createWardrobeController(
       throw Object.assign(new Error("Item not found."), { status: 404 });
     return value;
   };
-  async function storeProduct(productId) {
+  async function storeProduct(productId, selectedColour) {
     if (!productId) return null;
     const doc = await Product.findOne({
       _id: id(productId),
@@ -52,16 +53,22 @@ function createWardrobeController(
       throw Object.assign(new Error("This store product is unavailable."), {
         status: 404,
       });
+    const colours = listedColours(doc);
+    if (selectedColour !== undefined && (typeof selectedColour !== "string" || !colours.includes(selectedColour)))
+      throw v.badRequest("Choose a colour offered by this business.");
+    // Score a chosen variant only after verifying it against the seller's listing.
+    const colour = selectedColour || (colours.length === 1 ? colours[0] : "");
     return {
       productId: String(doc._id),
       name: doc.name,
       category: doc.category,
       style: [doc.style],
       material: doc.material || "",
-      colour: doc.colour || "",
+      colour,
+      availableColours: colours,
       ...inferSuitability({
         category: doc.category,
-        colour: doc.colour,
+        colour,
         material: doc.material,
         style: [doc.style],
       }),
@@ -124,7 +131,7 @@ function createWardrobeController(
   }
   async function plan(req, res) {
     const date = v.dateInput(req.body?.date),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion"),
+      occasion = v.occasionInput(req.body?.occasion),
       lockedIds = req.body?.lockedIds || [];
     if (
       !Array.isArray(lockedIds) ||
@@ -139,7 +146,7 @@ function createWardrobeController(
     const [items, forecast, product] = await Promise.all([
       Item.find({ userId: owner(req) }),
       weatherProvider(date),
-      storeProduct(req.body.productId),
+      storeProduct(req.body.productId, req.body.productColour),
     ]);
     const wardrobe = items.map(itemJson);
     const plans = recommendations(wardrobe, {
@@ -177,7 +184,7 @@ function createWardrobeController(
   }
   async function selection(req, res) {
     const date = v.dateInput(req.body?.date),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion");
+      occasion = v.occasionInput(req.body?.occasion);
     const ids = req.body?.itemIds;
     if (
       !Array.isArray(ids) ||
@@ -193,7 +200,7 @@ function createWardrobeController(
       : req.user.preferredStyles || [];
     const [docs, product, forecast] = await Promise.all([
       Item.find({ userId: owner(req), _id: { $in: ids } }),
-      storeProduct(req.body.productId),
+      storeProduct(req.body.productId, req.body.productColour),
       weatherProvider(date),
     ]);
     if (docs.length !== ids.length)
@@ -210,7 +217,7 @@ function createWardrobeController(
 
   async function save(req, res) {
     const name = v.text(req.body?.name, "Outfit name", 80),
-      occasion = v.choice(req.body?.occasion, v.OCCASIONS, "occasion"),
+      occasion = v.occasionInput(req.body?.occasion),
       eventDate = v.dateInput(req.body?.date),
       ids = req.body.itemIds;
     if (
@@ -225,7 +232,7 @@ function createWardrobeController(
       throw v.badRequest(
         "A piece was removed from your wardrobe. Generate a new outfit.",
       );
-    const product = await storeProduct(req.body.productId),
+    const product = await storeProduct(req.body.productId, req.body.productColour),
       pieces = [...docs.map(itemJson), ...(product ? [product] : [])];
     if (!pieces.length)
       throw v.badRequest("Use at least one piece before saving an outfit.");

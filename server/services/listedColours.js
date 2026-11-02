@@ -1,5 +1,5 @@
-// Existing business listings have no structured colour field. For the request
-// checkout, use only colour names explicitly present in a product's own details.
+// Prefer structured business product colours. For older listings, use only
+// colour names explicitly present in the product's own details.
 // Never turn the wardrobe's complete colour palette into implied stock variants.
 const { COLOURS } = require('./wardrobeValidation');
 const pattern = new RegExp(`\\b(?:${COLOURS.slice().sort((a, b) => b.length - a.length).join('|')})\\b`, 'gi');
@@ -13,8 +13,9 @@ function namesIn(text) {
 }
 
 function listedColours(product = {}) {
-  // Future-proof: if a teammate adds a real structured field later, prefer it.
-  const specified = product.colours ?? product.colors ?? product.colour ?? product.color;
+  // Structured metadata takes precedence over incidental colours in the description.
+  const specified = product.colours?.length ? product.colours
+    : product.colors?.length ? product.colors : product.colour ?? product.color;
   const explicit = namesIn(Array.isArray(specified) ? specified.join(', ') : specified);
   if (explicit.length) return explicit;
 

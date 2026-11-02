@@ -26,6 +26,7 @@ const matches = (record, filter) => Object.entries(filter).every(([key, value]) 
   if (value === null) return actual == null
   if (value && typeof value === 'object' && !(value instanceof Date)) {
     return Object.entries(value).every(([operator, test]) => {
+      if (operator === '$eq') return String(actual) === String(test)
       if (operator === '$in') return test.some(item => String(item) === String(actual))
       if (operator === '$nin') return !test.some(item => String(item) === String(actual))
       if (operator === '$gte') return actual >= test
@@ -43,9 +44,19 @@ const query = (data, filter) => ({
 const context = {
   myBusiness: async () => ({ _id: 'my-business', styles: ['Casual'] }),
   Response: { find: async filter => replies.filter(row => matches(row, filter)) },
-  Request: { find: filter => query(requests, filter), countDocuments: async filter => requests.filter(row => matches(row, filter)).length },
+  Request: {
+    async updateMany(filter, update) {
+      for (const row of requests) {
+        if (row.deletedAt == null && row.status === 'open' && row.acceptedResponseId == null && row.deadline < '2026-10-22') {
+          row.status = update.$set.status
+          row.expiredAt = update.$set.expiredAt
+        }
+      }
+    },
+    find: filter => query(requests, filter), countDocuments: async filter => requests.filter(row => matches(row, filter)).length
+  },
   queryText: value => value || '', pageNumber: value => Number(value || 1),
-  singaporeToday: () => '2026-10-22', escapeRegex: value => value, badRequest: msg => new Error(msg),
+  singaporeToday: () => '2026-10-22', escapeRegex: value => value, badRequest: msg => new Error(msg), idIsValid: () => true,
   requestJson: item => ({ ...item, requestId: item._id }),
 }
 const getRequests = vm.runInNewContext(`(async function getRequests(req, res) {${functionText})`, context)
@@ -74,4 +85,19 @@ test('Like control is raised above the bottom caption and progress bar', () => {
   const css = fs.readFileSync(path.join(__dirname, '../../src/assets/styles/styleFeed.css'), 'utf8')
   assert.match(css, /\.sf-video-actions\{[^}]*bottom:clamp\(100px,\s*23%,\s*190px\)/)
   assert.doesNotMatch(css, /\.sf-video-actions\{[^}]*bottom:26px/)
+})
+
+test('expired replied requests have a persistent expiry marker', async () => {
+  const result = await fetch('replied')
+  const expired = result.requests.find(r => r.requestId === '003')
+  assert.equal(expired.status, 'closed')
+  assert.ok(Number.isFinite(new Date(expired.expiredAt).getTime()))
+})
+
+test('targeted deep link finds the intended replied request while keeping other businesses out', async () => {
+  let payload
+  await getRequests({ query: { tab: 'replied', requestId: '002' } }, { json(value) { payload = value } })
+  assert.deepEqual(Array.from(payload.requests, row => row.requestId), ['002'])
+  await getRequests({ query: { tab: 'replied', requestId: '005' } }, { json(value) { payload = value } })
+  assert.equal(payload.requests.length, 0, 'cannot fetch replies belonging only to another business')
 })

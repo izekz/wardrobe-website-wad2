@@ -2,14 +2,15 @@
 import { authState } from '../services/authService'
 import { communityApi, money, today } from '../services/communityApi'
 export default {
-  props: { product: { type: Object, required: true } },
+  props: { product: { type: Object, required: true }, selectedColour: { type: String, default: '' } },
   data() { return { request: null, reply: null, loading: false, busy: false, error: '', loadVersion: 0 } },
   computed: {
     hasContext() { return typeof this.$route.query.requestId === 'string' && typeof this.$route.query.responseId === 'string' },
     isOwner() { return this.request?.consumerId === authState.user?.id },
     isOpen() { return this.request?.status === 'open' && this.request.deadline >= today() && this.product.stock > 0 },
     isAccepted() { return this.request?.status === 'closed' && this.request.acceptedResponseId === this.reply?.responseId && !this.request.fulfilled },
-    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId } } },
+    canChoose() { return this.isOwner && !this.request?.fulfilled && this.product.stock > 0 && (this.isOpen || this.request?.status === 'closed') && !this.isAccepted },
+    checkoutRoute() { return { name: 'community-request-checkout', params: { requestId: this.request.requestId, responseId: this.reply.responseId }, query: this.selectedColour ? { colour: this.selectedColour } : {} } },
   },
   watch: { '$route.fullPath': { immediate: true, handler() { this.load() } } },
   beforeUnmount() { this.loadVersion++ },
@@ -30,11 +31,11 @@ export default {
       finally { if (version === this.loadVersion) this.loading = false }
     },
     async accept() {
-      if (this.busy || !this.isOwner || !this.isOpen) return
+      if (this.busy || !this.canChoose) return
       this.busy = true; this.error = ''
       try {
         await communityApi(`/requests/${this.request.requestId}/responses/${this.reply.responseId}/accept`, { method: 'POST', body: '{}' })
-        await this.$router.push({ name: 'community-request', params: { requestId: this.request.requestId }, query: { accepted: '1' } })
+        await this.$router.push({ name: 'community-request', params: { requestId: this.request.requestId }, query: { accepted: '1', ...(this.selectedColour ? { colour: this.selectedColour } : {}) } })
       } catch (error) { this.error = error.message }
       finally { this.busy = false }
     },
@@ -49,9 +50,9 @@ export default {
       <h2>{{ request.title }}</h2><p>Budget {{ money(request.budget) }} · {{ request.preferredStyle }}</p><p>{{ reply.message }}</p>
       <RouterLink v-if="isOwner && request.fulfilled && request.acceptedResponseId === reply.responseId" :to="checkoutRoute" class="community-btn">View demo receipt</RouterLink>
       <RouterLink v-else-if="isOwner && isAccepted" :to="checkoutRoute" class="community-btn">Continue to demo checkout</RouterLink>
-      <button v-else-if="isOwner && isOpen" type="button" class="community-btn w-100" :disabled="busy" @click="accept">{{ busy ? 'Accepting…' : 'Accept suggestion' }}</button>
+      <button v-else-if="canChoose" type="button" class="community-btn w-100" :disabled="busy" @click="accept">{{ busy ? 'Accepting…' : request.acceptedResponseId ? 'Choose this instead' : 'Accept suggestion' }}</button>
       <p v-else-if="isOwner" class="community-muted">{{ request.fulfilled ? 'You have already purchased a suggestion for this request.' : 'This request or item is no longer available for checkout.' }}</p>
-      <p v-if="isOwner && isOpen" class="community-muted small mt-2">Accepting closes the request. You can complete a demo purchase afterward.</p>
+      <p v-if="canChoose" class="community-muted small mt-2">Accepting closes the request. You can complete a demo purchase afterward.</p>
       <RouterLink :to="{ name: 'community-request', params: { requestId: request.requestId } }" class="d-inline-block mt-2">← Back to the request</RouterLink>
     </template>
     <p v-if="error" class="community-error" role="alert">{{ error }}</p>

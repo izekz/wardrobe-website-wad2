@@ -26,25 +26,26 @@ export const colours = [
 ];
 export const styles = [
   "Minimalist",
-  "Casual",
-  "Formal",
-  "Smart casual",
-  "Classic",
-  "Preppy",
   "Streetwear",
   "Vintage",
   "Y2K",
-  "Cosplay",
+  "Preppy",
+  "Classic",
+  "Romantic"
 ];
 export const occasions = [
-  "Presentation",
-  "Date",
-  "Interview",
-  "Casual outing",
-  "Formal dinner",
-  "Work",
   "University",
+  "Presentation",
+  "Interview",
+  "Date",
+  "Internship / work",
+  "Casual outings",
+  "Formal events"
 ];
+// Display/filter existing saved occasions using the current group terminology.
+export function normalizeOccasion(value) {
+  return ({ Work: "Internship / work", "Casual outing": "Casual outings", "Formal dinner": "Formal events" })[value] || value;
+}
 export const weatherTags = ["Warm", "Rainy", "Cool"];
 export const categoryName = (c) => (c === "Jackets" ? "Outerwear" : c);
 export function today() {

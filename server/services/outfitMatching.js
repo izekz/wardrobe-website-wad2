@@ -4,16 +4,26 @@ const pairs = new Set(["blue:pink", "green:pink", "pink:purple", "blue:yellow", 
 const array = (value) => Array.isArray(value) ? value : value ? [value] : [];
 const lower = (value) => String(value || "").trim().toLowerCase();
 // Each property contributes independently. Preferences never change these occasion rules.
+const { normalizeOccasion } = require("./clothingSuitability");
+// Points correspond to styleNames below. Maximum style contribution stays 30.
 const profiles = {
-  Presentation: { styles: [18, 9, 30, 27, 24, 24, 3, 15, 3, 3], polished: true, tip: "smart-casual or classic pieces in white, navy, black or beige" },
-  Interview: { styles: [9, 3, 30, 24, 27, 21, 0, 12, 0, 0], polished: true, tip: "formal or classic pieces in neutral colours" },
-  Work: { styles: [21, 12, 27, 30, 24, 24, 3, 15, 3, 0], polished: true, tip: "smart-casual pieces in neutral colours" },
-  "Formal dinner": { styles: [12, 3, 30, 21, 27, 15, 0, 21, 3, 0], polished: true, tip: "formal or classic pieces in black, navy or cream" },
-  Date: { styles: [24, 24, 24, 30, 27, 21, 18, 24, 21, 9], polished: false, tip: "smart-casual or classic pieces with one accent colour" },
-  "Casual outing": { styles: [24, 30, 12, 21, 21, 24, 30, 24, 27, 12], polished: false, tip: "casual or streetwear pieces with one neutral colour" },
-  University: { styles: [27, 30, 12, 24, 21, 30, 27, 21, 24, 9], polished: false, tip: "casual, preppy or minimalist pieces" },
+  University: { styles: [27, 27, 21, 24, 30, 21, 18], polished: false, tip: "preppy, minimalist or streetwear pieces" },
+  Presentation: { styles: [18, 3, 15, 3, 24, 24, 12], polished: true, tip: "classic or preppy pieces in white, navy, black or beige" },
+  Interview: { styles: [9, 0, 12, 0, 21, 27, 6], polished: true, tip: "classic or preppy pieces in neutral colours" },
+  Date: { styles: [24, 18, 24, 21, 21, 27, 30], polished: false, tip: "romantic or classic pieces with one accent colour" },
+  "Internship / work": { styles: [21, 3, 15, 3, 24, 24, 12], polished: true, tip: "classic or preppy pieces in neutral colours" },
+  "Casual outings": { styles: [24, 30, 24, 27, 24, 21, 24], polished: false, tip: "streetwear or minimalist pieces with one neutral colour" },
+  "Formal events": { styles: [12, 0, 21, 3, 15, 27, 27], polished: true, tip: "classic or romantic pieces in black, navy or cream" },
 };
-const styleNames = ["minimalist", "casual", "formal", "smart casual", "classic", "preppy", "streetwear", "vintage", "y2k", "cosplay"];
+const styleNames = ["minimalist", "streetwear", "vintage", "y2k", "preppy", "classic", "romantic"];
+// Read-only compatibility for existing wardrobe items and old store listings.
+// Retired styles are not offered by the wardrobe form or planner filters.
+const legacyStyles = ["casual", "formal", "smart casual", "cosplay"];
+const legacyStylePoints = {
+  University: [30, 12, 24, 9], Presentation: [9, 30, 27, 3], Interview: [3, 30, 24, 0],
+  Date: [24, 24, 30, 9], "Internship / work": [12, 27, 30, 0],
+  "Casual outings": [30, 12, 21, 12], "Formal events": [3, 30, 21, 0],
+};
 const colourNames = new Set([...neutrals, "blue", "pink", "purple", "green", "red", "yellow", "orange", "multicolour"]);
 function materialKind(material) {
   const text = lower(material);
@@ -25,9 +35,15 @@ function materialKind(material) {
   return null;
 }
 function occasionRating(item, occasion) {
+  occasion = normalizeOccasion(occasion);
   const profile = profiles[occasion];
   if (!profile) throw badRequest("Choose a valid occasion.");
-  const indices = array(item.style).map(s => styleNames.indexOf(lower(s))).filter(i => i >= 0);
+  const stylePoints = array(item.style).map(style => {
+    const key = lower(style), index = styleNames.indexOf(key);
+    if (index >= 0) return profile.styles[index];
+    const legacyIndex = legacyStyles.indexOf(key);
+    return legacyIndex >= 0 ? legacyStylePoints[occasion][legacyIndex] : null;
+  }).filter(points => points !== null);
   const category = item.category;
   const categoryPoints = profile.polished
     ? { Jackets: 15, Tops: 10, Bottoms: 10, Dresses: 10, Shoes: 8, Accessories: 4 }
@@ -35,7 +51,7 @@ function occasionRating(item, occasion) {
   const colour = lower(item.colour), knownColour = colourNames.has(colour);
   const kind = materialKind(item.material);
   const components = [
-    { label: "Style", weight: 30, available: indices.length > 0, earned: indices.length ? Math.max(...indices.map(i => profile.styles[i])) : 0 },
+    { label: "Style", weight: 30, available: stylePoints.length > 0, earned: stylePoints.length ? Math.max(...stylePoints) : 0 },
     { label: "Category", weight: 15, available: category in categoryPoints, earned: categoryPoints[category] || 0 },
     { label: "Colour", weight: 10, available: knownColour, earned: !knownColour ? 0 : neutrals.has(colour) ? 10 : colour === "multicolour" ? 2 : profile.polished ? ["pink", "purple"].includes(colour) ? 7 : 3 : 8 },
     { label: "Material", weight: 5, available: !!kind, earned: !kind ? 0 : profile.polished ? { polished: 5, light: 4, relaxed: 2, heavy: 1, rain: 2 }[kind] : { polished: 4, light: 5, relaxed: 5, heavy: 3, rain: 4 }[kind] },
@@ -43,6 +59,7 @@ function occasionRating(item, occasion) {
   return { name: item.name || "This piece", itemId: item.itemId || item.productId, earned: components.reduce((n, c) => n + c.earned, 0), weight: 60, components, enoughData: components.every(c => c.available) };
 }
 function recommendationFor(item, { occasion, styles = [] }) {
+  occasion = normalizeOccasion(occasion);
   const earned = occasionRating(item, occasion).earned;
   const styleMatch = array(item.style).some(s => styles.some(preference => lower(preference) === lower(s)));
   const occasionMatch = earned >= 36;
@@ -222,6 +239,7 @@ function recommendations(
     .slice(0, 8);
 }
 function assessSelection(pieces, occasion, styles, weather) {
+  occasion = normalizeOccasion(occasion);
   if (!pieces.length) return null;
   if (!compatiblePieces(pieces)) throw badRequest("Choose one piece per category. A dress replaces a top and bottom.");
   const categories = new Set(pieces.map(p => p.category));

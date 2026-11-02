@@ -1,11 +1,12 @@
 <script>
 import { businessApi, sendJson, readPhoto, categories, styles, occasions } from '../../services/businessApi'
+import { colours } from '../../services/wardrobeService'
 import { refreshBusiness } from '../../services/businessStore'
 import BusinessIcon from '../../components/BusinessIcon.vue'
-const blank = () => ({ name: '', price: '', style: '', category: '', occasions: [], sizes: '', stock: '', description: '', status: 'active' })
+const blank = () => ({ name: '', price: '', style: '', category: '', colours: [], material: '', occasions: [], sizes: '', stock: '', description: '', status: 'active' })
 export default {
   components: { BusinessIcon },
-  data() { return { categories, styles, occasions, form: blank(), photo: '', photoPreview: '', loading: false, saving: false, error: '' } },
+  data() { return { categories, colours, styles, occasions, form: blank(), photo: '', photoPreview: '', sizePhoto: '', sizePhotoPreview: '', loading: false, saving: false, error: '' } },
   computed: {
     productId() { return this.$route.params.productId },
     editing() { return Boolean(this.productId) },
@@ -13,17 +14,18 @@ export default {
   watch: { productId: { immediate: true, handler() { this.load() } } },
   methods: {
     async load() {
-      this.form = blank(); this.photo = ''; this.photoPreview = ''; this.error = ''
+      this.form = blank(); this.photo = ''; this.photoPreview = ''; this.sizePhoto = ''; this.sizePhotoPreview = ''; this.error = ''
       if (!this.editing) return
       this.loading = true
       try {
         const { product } = await businessApi(`/products/${encodeURIComponent(this.productId)}`)
-        this.form = { name: product.name, price: product.price, style: product.style, category: product.category, occasions: [...product.occasions],
+        this.form = { name: product.name, price: product.price, style: product.style, category: product.category, colours: [...(product.colours?.length ? product.colours : product.availableColours?.length ? product.availableColours : product.colour ? [product.colour] : [])], material: product.material || '', occasions: [...product.occasions],
           sizes: product.sizes.join(', '), stock: product.stock, description: product.description, status: product.status }
-        this.photoPreview = product.imageURL
+        this.photoPreview = product.imageURL; this.sizePhotoPreview = product.sizeImageURL || ''
       } catch (error) { this.error = error.message }
       finally { this.loading = false }
     },
+    async chooseSizePhoto(event) { const file=event.target.files[0]; this.error=''; if(!file)return; try{this.sizePhoto=await readPhoto(file);this.sizePhotoPreview=this.sizePhoto}catch(error){this.error=error.message;event.target.value=''} },
     async choosePhoto(event) {
       const file = event.target.files[0]
       this.error = ''
@@ -33,11 +35,12 @@ export default {
     },
     async save() {
       if (this.saving || !this.$refs.form.reportValidity()) return
+      if (!this.form.colours.length) { this.error = 'Choose at least one available colour.'; return }
       if (!this.form.occasions.length) { this.error = 'Choose at least one occasion.'; return }
       if (!this.editing && !this.photo) { this.error = 'Please choose a product photo.'; return }
       this.saving = true; this.error = ''
       const body = { ...this.form, price: Number(this.form.price), stock: Number(this.form.stock),
-        sizes: this.form.sizes.split(',').map(size => size.trim()).filter(Boolean), photo: this.photo || undefined }
+        sizes: this.form.sizes.split(',').map(size => size.trim()).filter(Boolean), photo: this.photo || undefined, sizePhoto: this.sizePhoto || undefined }
       try {
         if (this.editing) await businessApi(`/products/${encodeURIComponent(this.productId)}`, sendJson('PUT', body))
         else { await businessApi('/products', sendJson('POST', body)); await refreshBusiness() }
@@ -61,6 +64,10 @@ export default {
             <div class="biz-photo-box"><img v-if="photoPreview" :src="photoPreview" alt="Product photo preview" /><span v-else>No photo yet</span></div>
             <input id="product-photo" type="file" accept="image/jpeg,image/png,image/webp" class="form-control mt-2" @change="choosePhoto" />
             <p v-if="editing" class="biz-muted small mt-1">Leave empty to keep the current photo.</p>
+            <label for="product-size-photo" class="form-label mt-4">Size guide image <span class="biz-muted">(recommended)</span></label>
+            <div class="biz-photo-box"><img v-if="sizePhotoPreview" :src="sizePhotoPreview" alt="Size guide preview" /><span v-else>Add a simple measurement chart so customers can choose confidently.</span></div>
+            <input id="product-size-photo" type="file" accept="image/jpeg,image/png,image/webp" class="form-control mt-2" @change="chooseSizePhoto" />
+            <p class="biz-muted small mt-1">Shown as the second image on the customer product page. Leave empty when editing to keep the current guide.</p>
           </div>
           <div class="col-lg-8">
             <div class="biz-field"><label for="product-name" class="form-label">Product name <span aria-hidden="true">*</span></label><input id="product-name" v-model.trim="form.name" class="form-control" required maxlength="80" /></div>
@@ -69,6 +76,20 @@ export default {
               <div class="col-sm-6 biz-field"><label for="product-stock" class="form-label">Stock <span aria-hidden="true">*</span></label><input id="product-stock" v-model="form.stock" type="number" class="form-control" min="0" max="100000" step="1" required /></div>
               <div class="col-sm-6 biz-field"><label for="product-style" class="form-label">Style <span aria-hidden="true">*</span></label><select id="product-style" v-model="form.style" class="form-select" required><option disabled value="">Select a style</option><option v-for="style in styles" :key="style">{{ style }}</option></select></div>
               <div class="col-sm-6 biz-field"><label for="product-category" class="form-label">Category <span aria-hidden="true">*</span></label><select id="product-category" v-model="form.category" class="form-select" required><option disabled value="">Select a category</option><option v-for="category in categories" :key="category">{{ category }}</option></select></div>
+              <fieldset class="col-12 biz-field">
+                <legend class="form-label">Available colours <span aria-hidden="true">*</span></legend>
+                <p class="biz-muted small">Choose at least one. Customers choose one of these colours at checkout.</p>
+                <div class="biz-chip-group">
+                  <label v-for="(colour, index) in colours" :key="colour" class="biz-chip">
+                    <input v-model="form.colours" type="checkbox" :value="colour" :required="index === 0 && !form.colours.length" />
+                    <span>{{ colour }}</span>
+                  </label>
+                </div>
+              </fieldset>
+              <div class="col-sm-6 biz-field">
+                <label for="product-material" class="form-label">Material <span aria-hidden="true">*</span></label>
+                <input id="product-material" v-model.trim="form.material" class="form-control" required maxlength="50" placeholder="e.g. Cotton, linen, denim" />
+              </div>
             </div>
             <fieldset class="biz-field"><legend class="form-label">Occasions <span aria-hidden="true">*</span></legend>
               <div class="biz-chip-group"><label v-for="occasion in occasions" :key="occasion" class="biz-chip"><input v-model="form.occasions" type="checkbox" :value="occasion" /> <span>{{ occasion }}</span></label></div></fieldset>

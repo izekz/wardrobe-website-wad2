@@ -11,12 +11,11 @@ export default {
       business: null,
       businessError: '',
       styles: [
-        'Minimalist', 'Casual', 'Vintage', 'Streetwear',
-        'Y2K', 'Formal', 'Preppy',
+        'Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic'
       ],
       occasions: [
-        'University', 'Presentation', 'Date',
-        'Internship / work', 'Casual outings', 'Formal events',
+        'University', 'Presentation', 'Interview', 'Date', 
+        'Internship / work', 'Casual outings', 'Formal events'
       ],
 
       form: {

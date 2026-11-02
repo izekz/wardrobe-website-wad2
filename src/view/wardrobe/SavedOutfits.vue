@@ -5,6 +5,7 @@ import {
   wardrobeApi,
   occasions,
   matchesSearch,
+  normalizeOccasion,
 } from "../../services/wardrobeService";
 const outfits = ref([]),
   loading = ref(true),
@@ -47,7 +48,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    outfits.value = (await wardrobeApi("/outfits")).outfits;
+    outfits.value = (await wardrobeApi("/outfits")).outfits.map(outfit => ({ ...outfit, occasion: normalizeOccasion(outfit.occasion) }));
   } catch (e) {
     error.value = e.message;
   } finally {

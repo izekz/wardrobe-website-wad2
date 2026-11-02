@@ -17,6 +17,7 @@ const route = useRoute(),
   loading = ref(editing),
   busy = ref(false),
   error = ref(""),
+  hasLegacyStyles = ref(false),
   preview = ref(""),
   photo = ref(undefined);
 const form = ref({
@@ -37,6 +38,8 @@ onMounted(async () => {
     const item = (await wardrobeApi("/items/" + route.params.id)).item;
     if (!alive) return;
     for (const key of Object.keys(form.value)) form.value[key] = item[key];
+    hasLegacyStyles.value = form.value.style.some(style => !styles.includes(style));
+    form.value.style = form.value.style.filter(style => styles.includes(style));
     preview.value = item.imageURL;
   } catch (e) {
     error.value = e.message;
@@ -171,6 +174,7 @@ async function submit() {
               Style <span class="wd-required" aria-hidden="true">*</span>
               <small>Choose at least one</small>
             </legend>
+            <p v-if="hasLegacyStyles" class="wd-basics-note">This item uses older style tags. Saving will use the current styles selected below.</p>
             <div class="wd-check-tags">
               <label
                 v-for="value in styles"
