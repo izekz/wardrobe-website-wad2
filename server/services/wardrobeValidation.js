@@ -63,11 +63,11 @@ function tags(value, options, label) {
     throw badRequest(`Choose at least one valid ${label}.`);
   return [...new Set(value)];
 }
-function itemInput(body = {}, requirePhoto = true) {
+function itemInput(body = {}, requirePhoto = true, options = {}) {
   const result = {
     name: text(body.name, "Item name", 80),
     category: choice(body.category, CATEGORIES, "category"),
-    colour: choice(body.colour, COLOURS, "colour"),
+    colour: options.allowUnknownColour && body.colour === "Not specified" ? "Not specified" : choice(body.colour, COLOURS, "colour"),
     material: text(body.material, "Material", 50),
     style: tags(body.style, STYLES, "style"),
   };

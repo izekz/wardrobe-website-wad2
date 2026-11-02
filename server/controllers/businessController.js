@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { badRequest, singaporeToday } = require('../communityValidation');
 const rules = require('../businessValidation');
 const { listedColours } = require('../services/listedColours');
+const { syncProductBoosts, remainingBoostMs } = require('../services/styleBoostAvailability');
 
 const defaultModels = {
   Business: require('../models/Business'),
@@ -10,7 +11,8 @@ const defaultModels = {
   SkipFeedback: require('../models/SkipFeedback'),
   Request: require('../models/OutfitRequest'),
   Response: require('../models/RequestResponse'),
-  User: require('../models/User')
+  User: require('../models/User'),
+  StyleVideo: require('../models/StyleVideo')
 };
 
 function failure(status, message) { const error = new Error(message); error.status = status; return error; }
@@ -77,12 +79,13 @@ function requestJson(doc) {
   return {
     requestId: String(doc._id), consumerName: doc.consumerName, title: doc.title, occasion: doc.occasion,
     description: doc.description, budget: doc.budget, preferredStyle: doc.preferredStyle,
-    deadline: doc.deadline, status: doc.status, createdAt: doc.createdAt
+    deadline: doc.deadline, status: doc.status, createdAt: doc.createdAt,
+    expired: !!doc.expiredAt, fulfilled: !!doc.purchaseId
   };
 }
 
 function createBusinessController(models = defaultModels) {
-  const { Business, Product, CoinTransaction, SkipFeedback, Request, Response, User } = models;
+  const { Business, Product, CoinTransaction, SkipFeedback, Request, Response, User, StyleVideo } = models;
 
   // Promotions last 7 days. Switch off any that have run out before reading products.
   async function expirePromotions(filter = {}) {
@@ -177,14 +180,25 @@ function createBusinessController(models = defaultModels) {
     const input = rules.productInput(req.body, { photoRequired: false });
     if (!input.photo) delete input.photo;
     if (!input.sizePhoto) delete input.sizePhoto;
+    const wasAvailable = product.status === 'active' && product.stock > 0;
     product.set(input);
     await product.save();
+    const isAvailable = product.status === 'active' && product.stock > 0;
+    if (StyleVideo && wasAvailable !== isAvailable) {
+      await syncProductBoosts(StyleVideo, product._id, isAvailable);
+    }
     res.json({ product: productJson(product) });
   }
 
   async function deleteProduct(req, res) {
     const business = await myBusiness(req);
     const product = await myProduct(req, business);
+    if (StyleVideo) {
+      const videos = await StyleVideo.find({ productId: String(product._id), boostedUntil: { $ne: null } });
+      if (videos.some(video => remainingBoostMs(video) > 0)) {
+        throw failure(409, 'This product has unused paid Style Feed promotion time. Hide it instead of deleting it.');
+      }
+    }
     await Product.deleteOne({ _id: product._id });
     res.json({ message: 'Product deleted.' });
   }
@@ -302,6 +316,8 @@ function createBusinessController(models = defaultModels) {
   // ---------- Request board (reads Person 3's outfit requests) ----------
   async function getRequests(req, res) {
     const business = await myBusiness(req);
+    await Request.updateMany({ deletedAt: null, status: 'open', acceptedResponseId: null, deadline: { $lt: singaporeToday() } },
+      { $set: { status: 'closed', expiredAt: new Date() } });
     // The business inbox has two distinct lists:
     //   open    — requests awaiting this business's first suggestion
     //   replied — every non-deleted request this business has responded to,
@@ -319,6 +335,8 @@ function createBusinessController(models = defaultModels) {
     else if (req.query.myStyles === 'true') filter.preferredStyle = { $in: business.styles };
     const search = queryText(req.query.search);
     if (search) filter.title = { $regex: escapeRegex(search), $options: 'i' };
+    const targetId = queryText(req.query.requestId, 30);
+    if (targetId && !idIsValid(targetId)) throw badRequest('Choose a valid request.');
 
     if (tab) {
       // Query by the business that SENT the reply, not merely the request's
@@ -330,6 +348,7 @@ function createBusinessController(models = defaultModels) {
         ? { $in: repliedIds }
         : { $nin: repliedIds };
     }
+    if (targetId) filter._id = { ...(filter._id || {}), $eq: targetId };
     const page = pageNumber(req.query.page), pageSize = 12;
     const [items, total] = await Promise.all([
       Request.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * pageSize).limit(pageSize),

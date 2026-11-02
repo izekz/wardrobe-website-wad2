@@ -33,7 +33,7 @@ export default {
     async load() {
       this.loading = true; this.error = ''; this.needsProfile = false
       try {
-        const [dashboard, board, list] = await Promise.all([businessApi('/dashboard'), businessApi('/requests'), businessApi('/products')])
+        const [dashboard, board, list] = await Promise.all([businessApi('/dashboard'), businessApi('/requests?tab=open'), businessApi('/products')])
         this.data = dashboard; this.requests = board.requests; this.openTotal = board.total
         this.products = list.products.filter(p => p.status === 'active' && p.stock > 0)
       } catch (error) { if (error.status === 409) this.needsProfile = true; else this.error = error.message }

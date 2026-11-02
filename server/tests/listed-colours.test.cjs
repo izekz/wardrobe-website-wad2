@@ -24,11 +24,16 @@ test('customer selects size at checkout only, with listed-colour display and ser
   const suggestion = fs.readFileSync(path.join(src, 'src/components/RequestSuggestionAction.vue'), 'utf8');
   const checkout = fs.readFileSync(path.join(src, 'src/view/community/RequestCheckout.vue'), 'utf8');
   const commerce = fs.readFileSync(path.join(src, 'server/controllers/requestCommerceController.js'), 'utf8');
-  assert.match(productPage, /<fieldset v-if="!isSuggestion">/);
+  assert.match(productPage, /<fieldset v-if="!isSuggestion&&product\.sizes\?\.length"/);
   assert.doesNotMatch(suggestion, /selectedSize|selected-size/);
   assert.doesNotMatch(checkout, /\$route\.query\.size/);
   assert.match(checkout, /availableColours\.length === 1/);
   assert.match(checkout, /availableColours\.length > 1/);
-  assert.match(checkout, /The business hasn't specified a colour/);
-  assert.match(commerce, /offeredColours\.length && !offeredColours\.includes\(req\.body\?\.colour\)/);
+  assert.match(checkout, /Colour not specified by the seller/);
+  assert.match(commerce, /offeredColours\.length \? !offeredColours\.includes\(req\.body\?\.colour\) : req\.body\?\.colour !== 'Not specified'/);
+});
+
+test('a purchased suggestion receipt belongs to the response ID in its checkout URL', () => {
+  const checkout = fs.readFileSync(path.join(src, 'src/view/community/RequestCheckout.vue'), 'utf8');
+  assert.match(checkout, /receipt\.purchase\.responseId !== this\.\$route\.params\.responseId/);
 });

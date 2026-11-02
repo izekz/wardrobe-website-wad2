@@ -7,8 +7,10 @@ const defaultModels = {
   Response: require('../models/RequestResponse'),
   User: require('../models/User'),
   Product: require('../models/Product'),
+  Business: require('../models/Business'),
   Item: require('../models/WardrobeItem'),
   Purchase: require('../models/RequestPurchase'),
+  StyleVideo: require('../models/StyleVideo'),
 };
 
 const { actorFor } = require('../middleware/community');
@@ -35,56 +37,17 @@ function requestJson(doc) {
     title: doc.title, occasion: doc.occasion, description: doc.description, budget: doc.budget,
     preferredStyle: doc.preferredStyle, deadline: doc.deadline, status: doc.status, createdAt: doc.createdAt,
     acceptedResponseId: doc.acceptedResponseId ? String(doc.acceptedResponseId) : null,
-    fulfilled: !!doc.purchaseId
+    expired: !!doc.expiredAt, closedByCustomer: !!doc.closedByCustomer, fulfilled: !!doc.purchaseId
   };
 }
 
 function createCommunityController(models = defaultModels) {
   const { Listing, Request, Response, User, Product } = models;
-  const { FREE_REQUESTS, EXTRA_REQUEST_CREDITS, CREDIT_PACKAGES } = validation;
-
-  // ---------- Credits: the first few open requests are free, each one after that costs credits ----------
-  // Requests past their needed-by date no longer use up a free slot.
-  function openRequestCount(consumerId) {
-    return Request.countDocuments({ consumerId, deletedAt: null, status: 'open', deadline: { $gte: validation.singaporeToday() } });
-  }
-  async function creditBalance(consumerId) {
-    const user = idIsValid(consumerId) ? await User.findById(consumerId) : null;
-    return user?.credits ?? 0;
-  }
-  async function walletJson(consumerId) {
-    const [credits, openCount] = await Promise.all([creditBalance(consumerId), openRequestCount(consumerId)]);
-    return { credits, openCount, freeRequests: FREE_REQUESTS, extraRequestCost: EXTRA_REQUEST_CREDITS, packages: CREDIT_PACKAGES };
-  }
-  // Returns how many credits were taken (0 while the customer is inside the free allowance).
-  async function chargeForExtraRequest(consumerId) {
-    if (await openRequestCount(consumerId) < FREE_REQUESTS) return 0;
-    const updated = idIsValid(consumerId) && await User.findOneAndUpdate({ _id: consumerId, credits: { $gte: EXTRA_REQUEST_CREDITS } },
-      { $inc: { credits: -EXTRA_REQUEST_CREDITS } }, { returnDocument: 'after' });
-    if (!updated) {
-      const error = new Error(`You've used your ${FREE_REQUESTS} free open requests. Another one costs ${EXTRA_REQUEST_CREDITS} credits. Buy credits, or close a request first.`);
-      error.status = 409;
-      throw error;
-    }
-    return EXTRA_REQUEST_CREDITS;
-  }
-  async function refundCredits(consumerId, amount) {
-    if (amount) await User.updateOne({ _id: consumerId }, { $inc: { credits: amount } });
-  }
-
-  async function getCredits(req, res) {
-    res.set('Cache-Control', 'no-store');
-    res.json(await walletJson(req.communityActor.id));
-  }
-
-  // Simulated payment for the demo, like the business coins: no card details, the balance is simply topped up.
-  async function purchaseCredits(req, res) {
-    const amount = req.body?.credits;
-    if (!CREDIT_PACKAGES.includes(amount)) throw validation.badRequest('Choose one of the credit packages.');
-    const id = req.communityActor.id;
-    const updated = idIsValid(id) && await User.findOneAndUpdate({ _id: id }, { $inc: { credits: amount } }, { returnDocument: 'after' });
-    if (!updated) return res.status(404).json({ message: 'Sign in with a customer account to buy credits.' });
-    res.json(await walletJson(id));
+  // Outfit Requests are free to post. Business Style Feed boosts remain coin-funded.
+  // Expire only unaccepted requests. Accepted ones remain eligible for checkout.
+  async function expireRequests() {
+    await Request.updateMany({ deletedAt: null, status: 'open', acceptedResponseId: null, deadline: { $lt: validation.singaporeToday() } },
+      { $set: { status: 'closed', expiredAt: new Date() } });
   }
 
   async function requestSummaries(items) {
@@ -155,13 +118,8 @@ function createCommunityController(models = defaultModels) {
       if (existing.deadline < validation.singaporeToday()) throw validation.badRequest('This request is past its needed-by date. Post a new request instead.');
       filter.deadline = { $gte: validation.singaporeToday() };
     }
-    // Reopening a closed request takes a slot again, so it is charged like a new one.
-    const charged = status === 'open' && existing.status !== 'open' ? await chargeForExtraRequest(req.communityActor.id) : 0;
-    const item = await Request.findOneAndUpdate(filter, { $set: { status, acceptedResponseId: null, acceptedAt: null } }, { returnDocument: 'after', runValidators: true });
-    if (!item) {
-      await refundCredits(req.communityActor.id, charged);
-      return res.status(409).json({ message: 'The request changed. Refresh and try again.' });
-    }
+    const item = await Request.findOneAndUpdate(filter, { $set: { status, expiredAt: null, closedByCustomer: status === 'closed', acceptedResponseId: null, acceptedAt: null } }, { returnDocument: 'after', runValidators: true });
+    if (!item) return res.status(409).json({ message: 'The request changed. Refresh and try again.' });
     res.json({ request: requestJson(item) });
   }
 
@@ -185,12 +143,17 @@ function createCommunityController(models = defaultModels) {
       if (!listing && !request) return res.status(404).json({ message: 'Member not found.' });
       user = { name: listing?.ownerName || request.consumerName, role: 'consumer' };
     }
+    const actor = actorFor(req);
+    const ownHistory = actor?.id === id && ['consumer', 'customer'].includes(actor.role);
+    if (ownHistory) await expireRequests();
     const listingPage = pageNumber(req.query.listingsPage), requestPage = pageNumber(req.query.requestsPage), pageSize = 12;
     const [listings, listingTotal, requests, requestTotal] = await Promise.all([
       Listing.find({ ownerId: id }).sort({ createdAt: -1, _id: -1 }).skip((listingPage - 1) * pageSize).limit(pageSize),
       Listing.countDocuments({ ownerId: id }),
-      Request.find({ consumerId: id, deletedAt: null }).sort({ status: -1, createdAt: -1, _id: -1 }).skip((requestPage - 1) * pageSize).limit(pageSize),
-      Request.countDocuments({ consumerId: id, deletedAt: null })
+      ...(ownHistory ? [
+        Request.find({ consumerId: id, deletedAt: null }).sort({ status: -1, createdAt: -1, _id: -1 }).skip((requestPage - 1) * pageSize).limit(pageSize),
+        Request.countDocuments({ consumerId: id, deletedAt: null })
+      ] : [Promise.resolve([]), Promise.resolve(0)])
     ]);
     // Public profile data only: no email, password, session, or preferences.
     res.json({ member: { id, name: user.name, role: user.role },
@@ -261,7 +224,12 @@ function createCommunityController(models = defaultModels) {
   }
 
   async function getRequests(req, res) {
-    const filter = { deletedAt: null };
+    const actor = actorFor(req);
+    if (!actor) return res.status(401).json({ message: 'Sign in to view requests.' });
+    const isCustomer = ['consumer', 'customer'].includes(actor.role);
+    if (!isCustomer && actor.role !== 'business') return res.status(403).json({ message: 'This page is not available for this account.' });
+    if (isCustomer) await expireRequests();
+    const filter = { deletedAt: null, ...(isCustomer ? { consumerId: actor.id } : { status: 'open', deadline: { $gte: validation.singaporeToday() } }) };
     const search = cleanQuery(req.query.search);
     if (search) filter.title = { $regex: escapeRegex(search), $options: 'i' };
     const style = cleanQuery(req.query.style);
@@ -269,14 +237,8 @@ function createCommunityController(models = defaultModels) {
     if (req.query.openOnly === 'true') filter.status = 'open';
     const status = cleanQuery(req.query.status);
     if (status && !['open', 'closed'].includes(status)) throw validation.badRequest('Choose open or closed requests.');
+    if (status && !isCustomer && status !== 'open') return res.status(403).json({ message: 'Closed requests are private.' });
     if (status) filter.status = status;
-    let mine = null;
-    if (req.query.mine === 'true') {
-      const actor = actorFor(req);
-      if (!actor) return res.status(401).json({ message: 'Sign in to see your requests.' });
-      filter.consumerId = actor.id;
-      mine = actor.id;
-    }
     const pageText = cleanQuery(req.query.page, 8) || '1';
     if (!/^[1-9]\d{0,4}$/.test(pageText)) throw validation.badRequest('Choose a valid page.');
     const page = Number(pageText), pageSize = 12;
@@ -286,7 +248,7 @@ function createCommunityController(models = defaultModels) {
       Request.countDocuments(filter)
     ]);
     res.set('Cache-Control', 'no-store');
-    res.json({ requests: await requestSummaries(items), total, page, pageSize, ...(mine ? { wallet: await walletJson(mine) } : {}) });
+    res.json({ requests: await requestSummaries(items), total, page, pageSize });
   }
 
   async function createRequest(req, res) {
@@ -294,12 +256,10 @@ function createCommunityController(models = defaultModels) {
     const key = { consumerId: actor.id, clientRequestId: input.clientRequestId };
     const existing = await Request.findOne(key);
     if (existing) return res.json({ request: requestJson(existing) });
-    const charged = await chargeForExtraRequest(actor.id);
     try {
       const item = await Request.create({ ...input, consumerId: actor.id, consumerName: actor.name });
-      res.status(201).json({ request: requestJson(item), creditsSpent: charged });
+      res.status(201).json({ request: requestJson(item) });
     } catch (error) {
-      await refundCredits(actor.id, charged);
       if (error.code !== 11000) throw error;
       const saved = await Request.findOne(key);
       if (!saved) throw error;
@@ -309,14 +269,28 @@ function createCommunityController(models = defaultModels) {
 
   async function getRequest(req, res) {
     if (!idIsValid(req.params.id)) return res.status(404).json({ message: 'Request not found.' });
+    await expireRequests();
     const item = await Request.findOne({ _id: req.params.id, deletedAt: null });
     if (!item) return res.status(404).json({ message: 'Request not found.' });
-    const responses = await Response.find({ requestId: item._id }).sort({ createdAt: -1 });
+    const actor = actorFor(req);
+    if (!actor) return res.status(401).json({ message: 'Please sign in.' });
+    const owner = actor.id === item.consumerId && ['consumer', 'customer'].includes(actor.role);
+    const isBusiness = actor.role === 'business';
+    let ownBusinessReplies = [];
+    if (!owner && isBusiness) {
+      const Business = models.Business || require('../models/Business');
+      const business = await Business.findOne({ ownerId: actor.id });
+      if (business) ownBusinessReplies = await Response.find({ requestId: item._id, businessId: String(business._id) });
+      if (!(item.status === 'open' && item.deadline >= validation.singaporeToday()) && !ownBusinessReplies.length) {
+        return res.status(404).json({ message: 'Request not found.' });
+      }
+    } else if (!owner) return res.status(404).json({ message: 'Request not found.' });
+    const responses = owner ? await Response.find({ requestId: item._id }).sort({ createdAt: -1 }) : ownBusinessReplies;
     const productIds = responses.map(reply => reply.productId).filter(idIsValid);
     const products = Product && productIds.length ? await Product.find({ _id: { $in: productIds }, status: 'active' }) : [];
     const byId = new Map(products.map(product => [String(product._id), product]));
     res.set('Cache-Control', 'no-store');
-    res.json({ request: requestJson(item), responses: responses.map(reply => ({
+    res.json({ request: { ...requestJson(item), ...(!owner ? { acceptedResponseId: ownBusinessReplies.some(reply => String(reply._id) === String(item.acceptedResponseId)) ? String(item.acceptedResponseId) : null } : {}) }, responses: responses.map(reply => ({
       responseId: String(reply._id), requestId: String(reply.requestId), businessId: reply.businessId,
       businessName: reply.businessName, productId: reply.productId, productName: reply.productName,
       productPrice: reply.productPrice, message: reply.message, createdAt: reply.createdAt,
@@ -332,7 +306,7 @@ function createCommunityController(models = defaultModels) {
     })) });
   }
 
-  return { getSession, getCredits, purchaseCredits, getListings, createListing, getListingImage, getListing, getRequests, createRequest, getRequest,
+  return { getSession, getListings, createListing, getListingImage, getListing, getRequests, createRequest, getRequest,
     getMyListings, updateListing, setListingStatus, deleteListing, setRequestStatus, deleteRequest, getMember };
 }
 

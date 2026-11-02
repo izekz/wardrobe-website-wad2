@@ -7,6 +7,7 @@ const Product = require('../models/Product');
 const CoinTransaction = require('../models/CoinTransaction');
 const { requireBusiness } = require('../middleware/business');
 const { trustedBrowser } = require('../middleware/authentication');
+const { boostIsLive, remainingBoostMs, syncProductBoosts } = require('../services/styleBoostAvailability');
 
 const router = express.Router();
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024; // MongoDB document cap is 16 MB.
@@ -14,7 +15,7 @@ const BOOST_COINS = 20;
 const BOOST_DAYS = 7;
 const objectId = value => mongoose.isObjectIdOrHexString(value);
 const error = (status, message) => Object.assign(new Error(message), { status });
-const sponsored = item => Boolean(item.boostedUntil && new Date(item.boostedUntil) > new Date());
+const sponsored = item => boostIsLive(item);
 const publicVideo = (item, product, business, userId) => ({
   videoId: String(item._id), businessId: item.businessId, productId: item.productId,
   businessName: business?.businessName || product?.businessName || 'Business',
@@ -23,10 +24,18 @@ const publicVideo = (item, product, business, userId) => ({
   productImageURL: product ? `/api/catalog/products/${product._id}/image` : null,
   caption: item.caption, videoURL: `/api/style-feed/${item._id}/video`,
   boosted: sponsored(item), boostedUntil: item.boostedUntil,
+  boostPaused: Boolean(item.boostPausedAt && remainingBoostMs(item) > 0),
+  boostRemainingMs: remainingBoostMs(item),
   liked: Boolean(userId && item.likesBy?.includes(userId)), likes: item.likes,
   views: item.views, sponsoredImpressions: item.sponsoredImpressions,
   uniqueReach: item.uniqueReach, productClicks: item.productClicks,
-  storeClicks: item.storeClicks, createdAt: item.createdAt
+  storeClicks: item.storeClicks, createdAt: item.createdAt,
+  boostStartedAt: item.boostStartedAt || null,
+  // Lifetime totals are retained, and sinceBoost measures changes following the latest spend.
+  sinceBoost: item.boostStartedAt ? Object.fromEntries(
+    ['views', 'likes', 'productClicks', 'storeClicks', 'sponsoredImpressions', 'uniqueReach']
+      .map(key => [key, key === 'uniqueReach' ? (item.boostUniqueReach || 0) : Math.max(0, (item[key] || 0) - (item.boostBaseline?.[key] || 0))])
+  ) : null
 });
 
 async function ownedVideo(req) {
@@ -42,10 +51,16 @@ async function ownedVideo(req) {
 // Each promoted post appears at most once per page load; sponsorship expires automatically.
 function interleave(organic, sponsoredVideos) {
   const result = [], promos = [...sponsoredVideos];
+  // When no organic videos exist, preserve a usable feed of sponsored clips.
+  if (!organic.length) return promos;
   let i = 0, j = 0;
-  while (i < organic.length || j < promos.length) {
-    for (let n = 0; n < 3 && i < organic.length; n++) result.push(organic[i++]);
-    if (j < promos.length) result.push(promos[j++]);
+  while (i < organic.length) {
+    let organicInGroup = 0;
+    for (; organicInGroup < 3 && i < organic.length; organicInGroup++) result.push(organic[i++]);
+    // Avoid a string of paid videos at the end of a feed. With fewer than
+    // three organic clips overall, allow one fallback sponsored placement.
+    // Other active boosts remain eligible on the NEXT randomized feed load.
+    if (j < promos.length && (organicInGroup === 3 || organic.length < 3)) result.push(promos[j++]);
   }
   return result;
 }
@@ -72,17 +87,38 @@ function avoidFirstRepeat(items, previousFirst) {
 
 function randomizedFeed(candidates, previousFirst = '', pick = randomInt) {
   const organic = shuffleCopy(candidates.filter(item => !sponsored(item)), pick);
+  // When paid placements outnumber sponsored slots, prioritise campaigns with
+  // fewer measured impressions *since their latest boost*. Shuffle first so
+  // equal-impression campaigns rotate randomly across refreshes.
   const promos = shuffleCopy(candidates.filter(sponsored), pick);
+  const campaignImpressions = video => Math.max(0, (video.sponsoredImpressions || 0) - (video.boostBaseline?.sponsoredImpressions || 0));
+  promos.sort((a, b) => campaignImpressions(a) - campaignImpressions(b));
   if (organic.length) avoidFirstRepeat(organic, previousFirst);
   else avoidFirstRepeat(promos, previousFirst);
   return interleave(organic, promos);
 }
 
 router.get('/', async (req, res) => {
-  const all = await StyleVideo.find({}).sort({ createdAt: -1 }).limit(120).select('+likesBy');
+  // Retain recent videos for discovery, PLUS ALL currently promoted posts.
+  // A prepaid clip must not disappear merely because 120 newer uploads arrived.
+  const [recent, boosted] = await Promise.all([
+    StyleVideo.find({}).sort({ createdAt: -1 }).limit(120).select('+likesBy'),
+    StyleVideo.find({ boostedUntil: { $gt: new Date() }, boostPausedAt: null }).select('+likesBy'),
+  ]);
+  const uniqueVideos = new Map([...recent, ...boosted].map(video => [String(video._id), video]));
+  const all = [...uniqueVideos.values()];
   const ids = [...new Set(all.map(v => v.productId))].filter(objectId);
   const products = await Product.find({ _id: { $in: ids }, status: 'active', stock: { $gt: 0 } });
   const byProduct = new Map(products.map(p => [String(p._id), p]));
+  // A store checkout outside the Outfit Request workflow can also exhaust stock.
+  // Reconcile unavailable boosted products when the feed is requested, without
+  // changing the teammates' general-purpose checkout implementation.
+  // The exact pause begins at first detection; an instantaneous cross-module
+  // pause would require the store checkout to notify this service.
+  const unavailableBoostProducts = new Set(all
+    .filter(video => remainingBoostMs(video) > 0 && !byProduct.has(video.productId))
+    .map(video => video.productId));
+  for (const id of unavailableBoostProducts) await syncProductBoosts(StyleVideo, id, false);
   const candidates = all.filter(v => byProduct.has(v.productId));
   const bizIds = [...new Set(candidates.map(v => v.businessId))].filter(objectId);
   const businesses = await Business.find({ _id: { $in: bizIds } });
@@ -103,8 +139,14 @@ router.get('/mine', requireBusiness, async (req, res) => {
   const videos = await StyleVideo.find({ businessId: String(business._id) }).sort({ createdAt: -1 });
   const products = await Product.find({ businessId: String(business._id) });
   const byProduct = new Map(products.map(p => [String(p._id), p]));
+  // Reconcile pre-existing listings and any stock changes made by older code.
+  // Pauses start when first detected; we cannot reconstruct past downtime.
+  for (const product of products) {
+    await syncProductBoosts(StyleVideo, product._id, product.status === 'active' && product.stock > 0);
+  }
+  const refreshed = await StyleVideo.find({ businessId: String(business._id) }).sort({ createdAt: -1 });
   res.set('Cache-Control', 'no-store');
-  res.json({ videos: videos.map(v => publicVideo(v, byProduct.get(v.productId), business, req.user.id)),
+  res.json({ videos: refreshed.map(v => publicVideo(v, byProduct.get(v.productId), business, req.user.id)),
     coins: business.coins, boostCoins: BOOST_COINS, boostDays: BOOST_DAYS });
 });
 
@@ -122,6 +164,11 @@ router.post('/', requireBusiness, trustedBrowser, async (req, res) => {
   if (match[2].length > Math.ceil(MAX_VIDEO_BYTES * 4 / 3) + 4) throw error(413, 'Keep videos under 8 MB.');
   const data = Buffer.from(match[2], 'base64');
   if (!data.length || data.length > MAX_VIDEO_BYTES) throw error(413, 'Keep videos under 8 MB.');
+  // Data URI MIME labels are user-controlled: check the actual container header.
+  const validContainer = match[1] === 'video/mp4'
+    ? data.length >= 12 && data.toString('ascii', 4, 8) === 'ftyp'
+    : data.length >= 4 && data.subarray(0, 4).equals(Buffer.from([0x1A, 0x45, 0xDF, 0xA3]));
+  if (!validContainer) throw error(400, 'This file is not a valid MP4 or WebM video.');
   const video = await StyleVideo.create({ businessId: String(business._id), productId: String(product._id),
     caption: caption.trim(), video: { data, contentType: match[1] } });
   res.status(201).json({ video: publicVideo(video, product, business, req.user.id) });
@@ -148,6 +195,9 @@ router.get('/:id/video', async (req, res) => {
 
 router.delete('/:id', requireBusiness, trustedBrowser, async (req, res) => {
   const { video } = await ownedVideo(req);
+  if (remainingBoostMs(video) > 0) {
+    throw error(409, 'This video still has unused paid promotion time. Keep it until the boost finishes.');
+  }
   await video.deleteOne();
   res.json({ message: 'Video deleted.' });
 });
@@ -156,15 +206,28 @@ router.post('/:id/boost', requireBusiness, trustedBrowser, async (req, res) => {
   const { video, business } = await ownedVideo(req);
   const product = await Product.findOne({ _id: video.productId, status: 'active', businessId: String(business._id), stock: { $gt: 0 } });
   if (!product) throw error(409, 'This video needs an active, in-stock product before you can boost it.');
-  const newWallet = await Business.findOneAndUpdate({ _id: business._id, coins: { $gte: BOOST_COINS } },
-    { $inc: { coins: -BOOST_COINS } }, { returnDocument: 'after' });
-  if (!newWallet) throw error(409, `You need ${BOOST_COINS} coins to boost. Top up on the Promotions page.`);
-  const start = sponsored(video) ? new Date(video.boostedUntil) : new Date();
-  video.boostedUntil = new Date(start.getTime() + BOOST_DAYS * 86400000);
-  await video.save();
-  await CoinTransaction.create({ businessId: String(business._id), productId: video.productId,
-    type: 'boost', amount: -BOOST_COINS, balanceAfter: newWallet.coins, note: `Style Feed video boost: ${product.name}` });
-  res.json({ coins: newWallet.coins, video: publicVideo(video, product, business, req.user.id) });
+  // One transaction: no lost coins if the promotion or ledger write fails.
+  const result = await mongoose.connection.transaction(async session => {
+    const current = await StyleVideo.findOne({ _id: video._id, businessId: String(business._id) }).session(session);
+    if (!current) throw error(404, 'Video not found.');
+    const newWallet = await Business.findOneAndUpdate({ _id: business._id, coins: { $gte: BOOST_COINS } },
+      { $inc: { coins: -BOOST_COINS } }, { returnDocument: 'after', session });
+    if (!newWallet) throw error(409, `You need ${BOOST_COINS} coins to boost. Top up on the Promotions page.`);
+    const now = new Date();
+    const remaining = remainingBoostMs(current, now);
+    const boostedUntil = new Date(now.getTime() + remaining + BOOST_DAYS * 86400000);
+    const baseline = Object.fromEntries(
+      ['views', 'likes', 'productClicks', 'storeClicks', 'sponsoredImpressions', 'uniqueReach']
+        .map(key => [key, current[key] || 0]));
+    const updated = await StyleVideo.findOneAndUpdate({ _id: current._id, businessId: String(business._id), boostedUntil: current.boostedUntil, boostPausedAt: current.boostPausedAt || null },
+      { $set: { boostedUntil, boostStartedAt: now, boostBaseline: baseline, boostSeenBy: [], boostUniqueReach: 0 }, $unset: { boostPausedAt: '' } },
+      { returnDocument: 'after', session, runValidators: true });
+    if (!updated) throw error(409, 'This promotion was changed by another action. Please retry.');
+    await CoinTransaction.create([{ businessId: String(business._id), productId: video.productId,
+      type: 'boost', amount: -BOOST_COINS, balanceAfter: newWallet.coins, note: `Style Feed video boost: ${product.name}` }], { session });
+    return { coins: newWallet.coins, video: publicVideo(updated, product, business, req.user.id) };
+  });
+  res.json(result);
 });
 
 router.post('/:id/like', trustedBrowser, async (req, res) => {
@@ -191,8 +254,10 @@ router.post('/:id/event', trustedBrowser, async (req, res) => {
     if (!sponsored(video)) return res.json({ counted: false });
     const first = await StyleVideo.updateOne({ _id: video._id, sponsoredSeenBy: { $ne: req.user.id } },
       { $addToSet: { sponsoredSeenBy: req.user.id }, $inc: { uniqueReach: 1 } });
+    const campaignFirst = await StyleVideo.updateOne({ _id: video._id, boostSeenBy: { $ne: req.user.id } },
+      { $addToSet: { boostSeenBy: req.user.id }, $inc: { boostUniqueReach: 1 } });
     await StyleVideo.updateOne({ _id: video._id }, { $inc: { sponsoredImpressions: 1 } });
-    return res.json({ counted: true, unique: first.modifiedCount === 1 });
+    return res.json({ counted: true, unique: first.modifiedCount === 1, uniqueThisBoost: campaignFirst.modifiedCount === 1 });
   }
   await StyleVideo.updateOne({ _id: video._id }, { $inc: { [field]: 1 } });
   res.json({ counted: true });

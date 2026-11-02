@@ -85,7 +85,12 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     const history = await api('/community/requests?mine=true&status=closed');
     assert.equal(history.body.requests.length, 1); assert.equal(history.body.requests[0].requestId, closed);
     const member = await api(`/community/members/${alice._id}`, 'bob');
-    assert.equal(member.body.requests.find(row => row.requestId === requestId).suggestionCount, 1);
+    assert.equal(member.body.requestTotal, 0, 'another customer cannot browse private request history');
+    assert.deepEqual(member.body.requests, []);
+    const self = await api(`/community/members/${alice._id}`, 'alice');
+    assert.equal(self.body.requests.find(row => row.requestId === requestId).suggestionCount, 1);
+    assert.equal((await api(`/community/requests/${requestId}`, 'bob')).status, 404);
+    assert.equal((await api('/community/requests', 'bob')).body.requests.some(row => row.requestId === requestId), false);
     assert.deepEqual(Object.keys(member.body.member).sort(), ['id', 'name', 'role']);
   });
   await t.test('Only the request owner can accept or purchase; a suggestion must belong to that request', async () => {
@@ -99,6 +104,23 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.equal((await api(responsePath() + '/accept', 'alice', 'POST', {})).status, 200);
     assert.equal((await api(`/community/requests/${requestId}`)).body.request.status, 'closed', 'accepting closes the request before payment');
     assert.equal((await api(`/community/requests/${requestId}/status`, 'alice', 'PATCH', { status: 'open' })).status, 409);
+  });
+  await t.test('Switch suggestion or cancel acceptance until the demo purchase happens', async () => {
+    const anotherProduct = await api('/business/products', 'seller', 'POST', { name: 'Navy Presentation Blazer', price: 36, category: 'Jackets', style: 'Minimalist', stock: 2,
+      colours: ['Navy'], material: 'Cotton', occasions: ['Presentation'], sizes: ['M'], description: 'Another jacket.', photo: png });
+    assert.equal(anotherProduct.status, 201);
+    const second = await api(`/business/requests/${requestId}/responses`, 'seller', 'POST', { productId: anotherProduct.body.product.productId, message: 'Another option.' });
+    // Request is now closed, but the owner can switch to a valid existing reply.
+    assert.equal(second.status, 400, 'business cannot send new replies after acceptance');
+    const manualReply = await models.Response.create({ requestId, businessId: String((await models.Business.findOne({ ownerId: String(seller._id) }))._id),
+      businessName: 'Minimalist Studio', productId: anotherProduct.body.product.productId, productName: 'Navy Presentation Blazer', productPrice: 36, message: 'Already suggested earlier.' });
+    const secondId = String(manualReply._id);
+    assert.equal((await api(`/community/requests/${requestId}/responses/${secondId}/accept`, 'bob', 'POST', {})).status, 404);
+    assert.equal((await api(`/community/requests/${requestId}/responses/${secondId}/accept`, 'alice', 'POST', {})).status, 200);
+    assert.equal((await api(`/community/requests/${requestId}`, 'alice')).body.request.acceptedResponseId, secondId);
+    assert.equal((await api(`/community/requests/${requestId}/acceptance`, 'alice', 'DELETE')).status, 200);
+    assert.equal((await api(`/community/requests/${requestId}`, 'alice')).body.request.status, 'open');
+    assert.equal((await api(responsePath() + '/accept', 'alice', 'POST', {})).status, 200);
   });
   await t.test('Validation and price changes never reduce stock or create wardrobe items', async () => {
     assert.equal((await api(responsePath() + '/purchase', 'alice', 'POST', { ...checkout, colour: 'Red' })).status, 400);
@@ -146,8 +168,14 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.ok(!(await api('/business/requests', 'seller')).body.requests.some(row => row.requestId === requestId));
     assert.ok((await api('/community/requests?mine=true&status=closed')).body.requests.some(row => row.requestId === requestId));
   });
+  let finalStockBoostVideoId;
   await t.test('Two different requests cannot buy the final piece twice', async () => {
     await models.Product.findOneAndUpdate({ _id: productId }, { $set: { stock: 1 } });
+    const sellerBusiness = await models.Business.findOne({ ownerId: String(seller._id) });
+    const promotion = await models.StyleVideo.create({ businessId: String(sellerBusiness._id), productId,
+      caption: 'One remaining', video: { data: Buffer.from('demo video'), contentType: 'video/mp4' },
+      boostedUntil: new Date(Date.now() + 7 * 86400000) });
+    finalStockBoostVideoId = String(promotion._id);
     const orders = [];
     for (const actor of ['alice', 'bob']) {
       const id = await postRequest(actor);
@@ -159,12 +187,43 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     const results = await Promise.all(orders.map(order => api(order.path + '/purchase', order.actor, 'POST', checkout)));
     assert.deepEqual(results.map(result => result.status).sort(), [201, 409]);
     assert.equal((await models.Product.findById(productId)).stock, 0);
+    const paused = await models.StyleVideo.findById(finalStockBoostVideoId);
+    assert.ok(paused.boostPausedAt, 'the last-unit checkout must pause the associated paid boost');
+  });
+  await t.test('Restocking through the business UI resumes exactly the unused promotion time', async () => {
+    const paused = await models.StyleVideo.findById(finalStockBoostVideoId);
+    const oldRemaining = paused.boostedUntil - paused.boostPausedAt;
+    const edit = await api(`/business/products/${productId}`, 'seller', 'PUT', {
+      name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist', stock: 2,
+      colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'], sizes: ['S', 'M', 'L'],
+      description: 'A light cotton jacket.', status: 'active'
+    });
+    assert.equal(edit.status, 200);
+    const restored = await models.StyleVideo.findById(finalStockBoostVideoId);
+    assert.equal(restored.boostPausedAt == null, true);
+    assert.ok(restored.boostedUntil > new Date());
+    assert.ok(Math.abs((restored.boostedUntil - Date.now()) - oldRemaining) < 2000,
+      'resuming should give the business its unused boost time, not buy a fresh seven days');
+    const productInput = { name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist',
+      stock: 2, colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'],
+      sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.' };
+    assert.equal((await api(`/business/products/${productId}`, 'seller', 'PUT',
+      { ...productInput, status: 'hidden' })).status, 200);
+    const hidden = await models.StyleVideo.findById(finalStockBoostVideoId);
+    assert.ok(hidden.boostPausedAt, 'hiding an item pauses the paid promotion');
+    assert.equal((await api(`/business/products/${productId}`, 'seller', 'DELETE')).status, 409,
+      'cannot permanently delete a product with remaining paid promotion time');
+    assert.equal((await api(`/business/products/${productId}`, 'seller', 'PUT',
+      { ...productInput, status: 'active' })).status, 200);
+    const visible = await models.StyleVideo.findById(finalStockBoostVideoId);
+    assert.equal(visible.boostPausedAt == null, true, 'restoring visibility resumes the promotion');
   });
   await t.test('Deleting a business product retains the copied wardrobe photo and historical response', async () => {
     await models.Product.deleteOne({ _id: productId });
     assert.equal((await api(`/wardrobe/items/${receipt.wardrobeItemId}/image`)).status, 200);
     const request = await api(`/community/requests/${requestId}`);
-    assert.equal(request.body.responses[0].product, null);
-    assert.equal(request.body.responses[0].productName, 'Structured Beige Jacket');
+    const originalSuggestion = request.body.responses.find(row => row.responseId === responseId);
+    assert.equal(originalSuggestion.product, null);
+    assert.equal(originalSuggestion.productName, 'Structured Beige Jacket');
   });
 });

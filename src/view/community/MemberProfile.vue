@@ -57,18 +57,18 @@ export default {
         <div>
           <p class="community-eyebrow">{{ member.role === 'business' ? 'Business' : 'Community member' }} profile</p>
           <h1>{{ member.name }}</h1>
-          <p class="community-muted mb-0">{{ total }} {{ total === 1 ? 'outfit request' : 'outfit requests' }}</p>
+          <p class="community-muted mb-0">{{ isOwnProfile ? 'Your request history' : 'Member profile' }}</p>
         </div>
         <RouterLink v-if="isOwnProfile" :to="{ name: 'community-requests', query: { mine: 'true' } }" class="community-btn community-btn-outline">My outfit requests</RouterLink>
       </header>
-      <h2 class="mt-4">Outfit request history</h2>
-      <p class="community-muted">Open requests appear first. Closed requests stay visible as history.</p>
-      <p v-if="!requests.length" class="community-empty">No outfit requests yet.</p>
-      <template v-for="(request, index) in requests" :key="request.requestId">
+      <h2 v-if="isOwnProfile" class="mt-4">Outfit request history</h2>
+      <p v-else class="community-muted mt-4">Request history is private to its owner.</p>
+      <p v-if="isOwnProfile && !requests.length" class="community-empty">No outfit requests yet.</p>
+      <template v-for="(request, index) in (isOwnProfile ? requests : [])" :key="request.requestId">
         <p v-if="request.status === 'closed' && (index === 0 || requests[index - 1].status !== 'closed')" class="request-section-divider">Closed requests</p>
         <RequestCard :request="request" :index="index" />
       </template>
-      <nav v-if="total > pageSize" class="community-pagination" aria-label="Member request pages">
+      <nav v-if="isOwnProfile && total > pageSize" class="community-pagination" aria-label="Member request pages">
         <button type="button" class="community-btn community-btn-outline" :disabled="page === 1" @click="changePage(page - 1)">Previous</button>
         <span>Page {{ page }} of {{ Math.ceil(total / pageSize) }}</span>
         <button type="button" class="community-btn community-btn-outline" :disabled="page * pageSize >= total" @click="changePage(page + 1)">Next</button>
