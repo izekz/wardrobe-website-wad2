@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import "../../assets/styles/wardrobe.css";
 import ClothingCard from "../../components/ClothingCard.vue";
+import CommunityIcon from "../../components/CommunityIcon.vue";
 import {
   wardrobeApi,
   send,
@@ -10,6 +11,9 @@ import {
   occasions,
   styles,
   weatherEmoji,
+  categories,
+  categoryName,
+  matchesSearch,
 } from "../../services/wardrobeService";
 const route = useRoute(),
   router = useRouter();
@@ -43,6 +47,35 @@ const candidates = computed(() =>
     a.name.localeCompare(b.name),
   ),
 );
+// Selection stays in the existing state; the picker and board are two views of it.
+const search = ref(""), category = ref(""), failedPhotos = ref({});
+const pickerCategories = [{ value: "", label: "All" }, ...categories.map(value => ({ value, label: categoryName(value) }))];
+const availablePieces = computed(() => candidates.value.filter(piece =>
+  !isSelected(piece) && (!category.value || piece.category === category.value) &&
+  matchesSearch([piece.name, piece.category, categoryName(piece.category), piece.colour, piece.style, piece.material], search.value),
+));
+const chosenPieces = computed(() => candidates.value.filter(isSelected));
+const boardGroups = computed(() => {
+  const dress = chosenPieces.value.some(piece => piece.category === "Dresses");
+  const labels = { Tops: "Top", Bottoms: "Bottom", Dresses: "Dress", Shoes: "Shoes", Jackets: "Outerwear", Accessories: "Accessory" };
+  const slots = (values, optional = false) => values.map(category => ({
+    category, label: labels[category], optional,
+    piece: chosenPieces.value.find(piece => piece.category === category),
+  }));
+  return [
+    { key: "basics", slots: slots(dress ? ["Dresses", "Shoes"] : ["Tops", "Bottoms", "Shoes"]) },
+    { key: "optional", slots: slots(["Jackets", "Accessories"], true) },
+  ];
+});
+const pieceKey = piece => `${piece.source}:${piece.itemId || piece.productId}`;
+const photoKey = piece => `${pieceKey(piece)}:${piece.imageURL}`;
+function resetOutfit() {
+  if (saving.value || busy.value) return;
+  selectedIds.value = [];
+  selectedProduct.value = false;
+  error.value = "";
+  notice.value = "";
+}
 const chosenCount = computed(
   () => selectedIds.value.length + Number(selectedProduct.value),
 );
@@ -250,142 +283,147 @@ watch(
 );
 </script>
 <template>
-  <section class="wd-page">
+  <section class="wd-page wd-studio">
     <header class="wd-planner-heading">
-      <p class="wd-eyebrow">A LITTLE INSPIRATION, ALREADY YOURS</p>
-      <h1>A little outfit inspiration</h1>
-      <p>Bring your wardrobe and your next occasion together.</p>
+      <p class="wd-eyebrow">YOUR PERSONAL STYLING STUDIO</p>
+      <h1>Build a look that feels like you</h1>
+      <p>Choose your pieces. See your outfit come together.</p>
     </header>
-    <div class="wd-planner-controls">
-      <label
-        >Occasion<select v-model="occasion" :disabled="saving">
+
+    <div class="wd-studio-toolbar">
+      <label class="wd-studio-field">
+        <CommunityIcon name="calendar" :size="21" />
+        <span id="wd-occasion-label">Occasion</span>
+        <select aria-labelledby="wd-occasion-label" v-model="occasion" :disabled="saving">
           <option v-for="o in occasions" :key="o">{{ o }}</option>
-        </select></label
-      >
-      <label
-        >Date<input
-          v-model="date"
-          :min="today()"
-          type="date"
-          :disabled="saving"
-      /></label>
-      <label
-        >Style<select v-model="style" :disabled="saving">
+        </select>
+      </label>
+      <label class="wd-studio-field">
+        <CommunityIcon name="calendar" :size="21" />
+        <span id="wd-date-label">Date</span>
+        <input aria-labelledby="wd-date-label" v-model="date" :min="today()" type="date" :disabled="saving" />
+      </label>
+      <label class="wd-studio-field">
+        <CommunityIcon name="hanger" :size="23" />
+        <span id="wd-style-label">Style</span>
+        <select aria-labelledby="wd-style-label" v-model="style" :disabled="saving">
           <option value="">My preferences</option>
           <option v-for="s in styles" :key="s">{{ s }}</option>
-        </select></label
-      >
-
-    </div>
-    <section class="wd-planner-weather" aria-label="Singapore weather forecast">
-      <div class="wd-weather" aria-live="polite">
-        <span aria-hidden="true">{{ weatherEmoji(weather) }}</span>
-        <div>
-          <strong>Singapore</strong
-          ><small>{{
-            busy
-              ? "Checking the forecast…"
-              : weather?.available
-                ? `${Math.round(weather.temperature)}°C high · ${weather.condition}`
-                : "Forecast unavailable"
-          }}</small>
+        </select>
+      </label>
+      <section class="wd-studio-forecast" aria-label="Singapore weather forecast">
+        <div class="wd-studio-weather" aria-live="polite">
+          <span class="wd-studio-weather-icon" aria-hidden="true">{{ weatherEmoji(weather) }}</span>
+          <div>
+            <strong>Singapore</strong>
+            <small>{{ busy ? "Checking the forecast…" : weather?.available
+              ? `${Math.round(weather.temperature)}°C · ${weather.condition}`
+              : "Forecast unavailable" }}</small>
+          </div>
+          <span v-if="weather?.available" class="wd-studio-rain">{{ weather.rainChance == null
+            ? "Rain chance unavailable" : `${weather.rainChance}% chance of rain` }}</span>
         </div>
-      </div>
-      <div v-if="weather?.available" class="wd-weather-advice">
-        <strong class="wd-rain-heading">{{
-          weather.rainChance === null
-            ? "Rain chance unavailable"
-            : `${weather.rainChance}% chance of rain`
-        }}</strong
-        ><small>Singapore · Forecast for {{ date }}</small>
-        <div class="wd-weather-tips">
+        <details v-if="weather?.available && weather.advice?.length" class="wd-studio-weather-tips">
+          <summary>Weather tips</summary>
           <p v-for="advice in weather.advice" :key="advice">{{ advice }}</p>
-        </div>
-      </div>
-    </section>
+        </details>
+      </section>
+    </div>
+
     <p v-if="error" role="alert" class="community-error">
       {{ error }}
-      <button class="wd-link" :disabled="saving" @click="generate">
-        Try again
-      </button>
+      <button class="wd-link" :disabled="saving" @click="generate">Try again</button>
     </p>
-    <p v-if="weather && !weather.available" class="wd-weather-note">
-      {{ weather.message }}
-    </p>
-    <p v-if="loading || busy" role="status">
-      Finding recommendations for your wardrobe…
-    </p>
+    <p v-if="weather && !weather.available" class="wd-weather-note">{{ weather.message }}</p>
+    <p v-if="loading || busy" role="status" class="wd-studio-loading">Finding recommendations for your wardrobe…</p>
     <template v-else>
       <p v-if="product" class="wd-product-note">
-        Styling with <strong>{{ product.name }}</strong> · Store pick · S${{
-          Number(product.price).toFixed(2)
-        }}
-        <RouterLink
-          class="wd-remove-store"
-          :to="{ name: 'outfit-match' }"
-        ><span aria-hidden="true">×</span> Remove store suggestion</RouterLink>
+        Styling with <strong>{{ product.name }}</strong> · Store pick · S${{ Number(product.price).toFixed(2) }}
+        <RouterLink class="wd-remove-store" :to="{ name: 'outfit-match' }"><span aria-hidden="true">×</span> Remove store suggestion</RouterLink>
       </p>
       <div v-if="!candidates.length" class="wd-empty">
         <span>✿</span>
         <h2>Your next outfit starts with a few pieces</h2>
-        <p>Add tops, bottoms or dresses and shoes to see recommendations.</p>
-        <RouterLink class="community-btn" :to="{ name: 'wardrobe-new' }"
-          >Add clothing</RouterLink
-        >
+        <p>Add tops, bottoms or dresses and shoes to start building your outfit.</p>
+        <RouterLink class="community-btn" :to="{ name: 'wardrobe-new' }">Add clothing</RouterLink>
       </div>
       <div v-else class="wd-planner-layout">
-        <div class="wd-outfit-board wd-tone-1 wd-picker">
+        <section class="wd-studio-picker" aria-labelledby="wd-picker-title">
           <header class="wd-picker-heading">
-            <h2>Choose your pieces</h2>
-            <p>
-              One piece per category. A dress replaces a top and bottom. Choosing
-              another piece in a category replaces your earlier choice.
-            </p>
+            <p class="wd-eyebrow">FROM YOUR WARDROBE</p>
+            <h2 id="wd-picker-title">Choose your pieces</h2>
+            <p>One piece per category. A dress replaces a top and bottom. Choosing another piece in a category replaces your earlier choice.</p>
           </header>
-          <div class="wd-picker-grid">
-            <ClothingCard
-              v-for="(piece, index) in candidates"
-              :key="piece.itemId || piece.productId"
-              :item="piece"
-              :index="index"
-              :class="{ 'wd-piece-chosen': isSelected(piece) }"
-            >
-              <template #overlay
-                ><span
-                  v-if="piece.recommendation?.label"
-                  class="wd-recommended-tag wd-card-recommended"
-                  :class="{ 'wd-style-match-tag': piece.recommendation?.kind === 'style' }"
-                  >{{ piece.recommendation.label }}</span
-                ></template
-              >
-              <p class="wd-item-style">
-                {{ piece.style?.join(" · ") || "Style not tagged" }}
-              </p>
-              <p class="wd-source-caption">
-                {{
-                  piece.source === "store"
-                    ? `Store pick · S$${Number(piece.price).toFixed(2)}`
-                    : "In your wardrobe"
-                }}
-              </p>
-              <button
-                type="button"
-                class="wd-use-piece"
-                :class="{ 'is-selected': isSelected(piece) }"
-                :aria-pressed="isSelected(piece)"
-                :disabled="saving"
-                @click="togglePiece(piece)"
-              >
-                <span aria-hidden="true">{{
-                  isSelected(piece) ? "−" : "＋"
-                }}</span
-                >{{
-                  isSelected(piece) ? "Remove this piece" : "Use this piece"
-                }}
+          <label class="wd-studio-search">
+            <CommunityIcon name="search" :size="19" />
+            <span class="visually-hidden">Search your wardrobe</span>
+            <input v-model="search" type="search" placeholder="Search your wardrobe…" />
+          </label>
+          <div class="wd-studio-categories" role="group" aria-label="Filter clothing by category">
+            <button v-for="option in pickerCategories" :key="option.value" type="button"
+              :class="{ active: category === option.value }" :aria-pressed="category === option.value"
+              @click="category = option.value">{{ option.label }}</button>
+          </div>
+          <p class="wd-studio-available" role="status">{{ availablePieces.length }} {{ availablePieces.length === 1 ? 'piece' : 'pieces' }} available</p>
+          <div v-if="availablePieces.length" class="wd-picker-grid">
+            <ClothingCard v-for="(piece, index) in availablePieces" :key="pieceKey(piece)" :item="piece" :index="index">
+              <template #overlay>
+                <span v-if="piece.recommendation?.label" class="wd-recommended-tag wd-card-recommended"
+                  :class="{ 'wd-style-match-tag': piece.recommendation?.kind === 'style' }">{{ piece.recommendation.label }}</span>
+              </template>
+              <p class="wd-item-style">{{ piece.style?.join(" · ") || "Style not tagged" }}</p>
+              <p class="wd-source-caption">{{ piece.source === 'store' ? `Store pick · S$${Number(piece.price).toFixed(2)}` : 'In your wardrobe' }}</p>
+              <button type="button" class="wd-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving" @click="togglePiece(piece)">
+                <span aria-hidden="true">＋</span>Use this piece
               </button>
             </ClothingCard>
           </div>
-        </div>
+          <div v-else class="wd-studio-picker-empty">
+            <CommunityIcon name="hanger" :size="32" />
+            <h3>{{ search || category ? 'No matching pieces' : 'Your pieces are on the board' }}</h3>
+            <p>{{ search || category ? 'Try a different search or category.' : 'Remove a piece from your outfit board to choose it again.' }}</p>
+            <button v-if="search || category" type="button" class="wd-link" @click="search = ''; category = ''">Clear filters</button>
+          </div>
+        </section>
+
+        <section class="wd-studio-board" aria-labelledby="wd-board-title">
+          <header class="wd-studio-board-heading">
+            <div><p class="wd-eyebrow">MAKE IT YOURS</p><h2 id="wd-board-title">Your outfit board</h2></div>
+            <span class="wd-studio-count" aria-live="polite">{{ chosenCount }} {{ chosenCount === 1 ? 'piece' : 'pieces' }}</span>
+          </header>
+          <p class="wd-studio-board-caption">Your selected photos, together.</p>
+          <div class="wd-studio-board-columns">
+            <div v-for="group in boardGroups" :key="group.key" :class="`wd-studio-board-${group.key}`">
+              <article v-for="slot in group.slots" :key="slot.category" class="wd-board-slot"
+                :class="{ 'is-empty': !slot.piece, 'is-dress': slot.category === 'Dresses' }"
+                :aria-label="`${slot.label}${slot.piece ? ': ' + slot.piece.name : ': not selected'}`">
+                <header class="wd-board-slot-heading">
+                  <span class="wd-board-slot-label">{{ slot.label }}<small v-if="slot.optional"> · Optional</small></span>
+                  <h3 v-if="slot.piece">{{ slot.piece.name }}</h3>
+                </header>
+                <template v-if="slot.piece">
+                  <div class="wd-board-photo">
+                    <img v-if="slot.piece.imageURL && !failedPhotos[photoKey(slot.piece)]" :src="slot.piece.imageURL"
+                      :alt="slot.piece.name" @error="failedPhotos[photoKey(slot.piece)] = true" />
+                    <span v-else class="wd-board-photo-fallback"><CommunityIcon name="hanger" :size="28" />Photo unavailable</span>
+                    <button type="button" class="wd-board-remove" :aria-label="`Remove ${slot.piece.name} from outfit`"
+                      :disabled="saving" @click="togglePiece(slot.piece)"><span aria-hidden="true">×</span></button>
+                  </div>
+                  <span v-if="slot.category === 'Dresses'" class="wd-board-dress-note">Covers top + bottom</span>
+                  <p v-if="slot.piece.source === 'store'" class="wd-board-store-note">Store pick · S${{ Number(slot.piece.price).toFixed(2) }}</p>
+                </template>
+                <div v-else class="wd-board-placeholder">
+                  <CommunityIcon :name="slot.category === 'Accessories' ? 'tag' : 'hanger'" :size="26" />
+                  <span>{{ slot.optional ? 'Add if you like' : `Choose ${slot.label === 'Shoes' ? 'shoes' : 'a ' + slot.label.toLowerCase()}` }}</span>
+                </div>
+              </article>
+            </div>
+          </div>
+          <button type="button" class="wd-studio-reset" :disabled="!chosenCount || saving" @click="resetOutfit">
+            <span aria-hidden="true">↺</span> Reset outfit
+          </button>
+        </section>
+
         <aside class="wd-plan-summary">
           <p class="wd-eyebrow">YOUR SELECTION</p>
           <div class="wd-summary-title">

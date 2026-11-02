@@ -1535,3 +1535,123 @@
 .wd-item-score-details summary { cursor: pointer; color: #67415f; }
 .wd-item-score-details section { padding: 12px 0; border-bottom: 1px solid #eadfea; }
 .wd-score-detail-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; }
+
+/* Outfit Planner studio. Keep these overrides inside this page. */
+.wd-studio { padding: 22px 0 36px; }
+.wd-studio .wd-planner-heading { margin: 12px 0 26px; }
+.wd-studio .wd-planner-heading h1 { font-size: clamp(32px, 3.2vw, 48px); letter-spacing: -.035em; margin: 0 0 10px; }
+.wd-studio .wd-planner-heading > p:last-child { font-size: 16px; margin-bottom: 0; }
+.wd-studio-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(270px, 1.6fr); align-items: start; gap: 12px; margin-bottom: 26px; }
+.wd-studio-field { display: grid; grid-template-columns: 23px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 4px; padding: 12px 15px; border: 1px solid #e8dfe7; border-radius: 14px; background: #fffdfa; min-width: 0; }
+.wd-studio-field > svg { grid-row: 1 / 3; align-self: center; color: #746078; }
+.wd-studio-field > span { font-size: 11px; font-weight: 600; color: #6c596d; }
+.wd-studio .wd-studio-field > select, .wd-studio .wd-studio-field > input[type="date"] { width: 100%; min-width: 0; min-height: 30px; padding: 3px 0; border: 0; border-radius: 3px; font-size: 13px; background: transparent; }
+.wd-studio-forecast { min-width: 0; border-radius: 14px; background: #efe7f8; padding: 12px 14px; }
+.wd-studio-weather { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.wd-studio-weather-icon { font-size: 28px; flex-shrink: 0; }
+.wd-studio-weather > div { min-width: 0; flex: 1; }
+.wd-studio-weather strong { display: block; font-size: 12px; }
+.wd-studio-weather small { display: block; margin-top: 3px; font-size: 11px; color: #756381; }
+.wd-studio-rain { flex: 0 1 108px; text-align: center; padding: 8px 10px; border-radius: 16px; background: #fff0b8; color: #75571b; font-size: 11px; line-height: 1.45; }
+.wd-studio-weather-tips { font-size: 11px; color: #735b7c; margin-top: 5px; }
+.wd-studio-weather-tips summary { cursor: pointer; width: fit-content; }
+.wd-studio-weather-tips summary:focus-visible { outline: 2px solid #97668c; outline-offset: 3px; }
+.wd-studio-weather-tips p { margin: 7px 0 0; line-height: 1.6; }
+.wd-studio-loading { padding: 28px; text-align: center; color: #826d81; }
+.wd-studio .wd-planner-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(300px, 1fr); grid-template-areas: 'picker board selection'; gap: 18px; }
+.wd-studio .wd-plan-summary { grid-area: selection; min-width: 0; overflow-wrap: anywhere; }
+.wd-studio-picker { grid-area: picker; min-width: 0; background: #fffdfa; border: 1px solid #e9e0e6; border-radius: 20px; padding: 20px 16px 16px; }
+.wd-studio .wd-picker-heading { margin: 0 0 16px; text-align: left; }
+.wd-studio .wd-picker-heading .wd-eyebrow { margin: 0 0 8px; font-size: 9px !important; }
+.wd-studio .wd-picker-heading h2 { font-size: 27px; margin: 0 0 9px; }
+.wd-studio .wd-picker-heading > p:last-child { margin: 0; color: #85728a; font-size: 11px; line-height: 1.65; }
+.wd-studio-search { display: flex; align-items: center; gap: 8px; border: 1px solid #e5dce3; border-radius: 10px; padding: 0 10px; color: #8a768c; }
+.wd-studio .wd-studio-search input[type="search"] { border: 0; border-radius: 8px; padding: 10px 0; width: 100%; min-width: 0; background: transparent; font-size: 12px; }
+.wd-studio-search:focus-within { outline: 2px solid #97668c; outline-offset: 3px; }
+.wd-studio .wd-studio-search input[type="search"]:focus { outline: none; }
+.wd-studio-categories { display: flex; gap: 5px; overflow-x: auto; padding: 8px 3px; margin-top: 6px; scrollbar-width: thin; }
+.wd-studio-categories button { flex-shrink: 0; padding: 9px 11px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #6d586d; font-size: 11px; min-height: 36px; }
+.wd-studio-categories button:hover { background: #f8f1fa; }
+.wd-studio-categories button.active { background: #eee2f9; color: #502345; font-weight: 600; }
+.wd-studio-available { font-size: 10px; color: #937e92; margin: 4px 3px 10px; }
+.wd-studio .wd-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 820px; padding: 3px; scrollbar-width: thin; }
+.wd-studio .wd-picker-grid .wd-card { border: 1px solid #e8e0e7; border-radius: 12px; box-shadow: none; }
+.wd-studio .wd-picker-grid .wd-photo { height: 150px; background: #f7f2f6; }
+.wd-studio .wd-picker-grid .wd-photo img { object-fit: contain; }
+.wd-studio .wd-picker-grid .wd-card-body { padding: 10px; }
+.wd-studio .wd-picker-grid .wd-card-body h2 { font-family: Arial, Helvetica, sans-serif; color: #49364a; font-size: 12px; font-weight: 600; letter-spacing: normal; line-height: 1.4; margin: 0 0 8px; }
+.wd-studio .wd-picker-grid .wd-tags { gap: 4px; }
+.wd-studio .wd-picker-grid .wd-tags span { padding: 3px 6px; font-size: 9px; }
+.wd-studio .wd-picker-grid .wd-item-style { margin: 8px 0 5px; font-size: 10px; }
+.wd-studio .wd-picker-grid .wd-source-caption { font-size: 9px; margin-bottom: 10px; }
+.wd-studio .wd-picker-grid .wd-use-piece { min-height: 38px; gap: 4px; padding: 8px 5px; font-size: 10px; border-radius: 8px; }
+.wd-studio .wd-card-recommended { top: 7px; left: 7px; padding: 5px 7px; font-size: 9px; max-width: calc(100% - 14px); }
+.wd-studio-picker-empty { display: grid; justify-items: center; text-align: center; padding: 40px 15px; color: #917796; }
+.wd-studio-picker-empty h3 { font-family: Georgia, serif; color: #633b5c; font-size: 21px; margin: 16px 0 8px; }
+.wd-studio-picker-empty p { font-size: 12px; line-height: 1.7; }
+.wd-studio-board { grid-area: board; min-width: 0; border-radius: 20px; background: linear-gradient(145deg, #eee5f9, #f5effb); padding: 22px 16px 16px; }
+.wd-studio-board-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wd-studio-board-heading .wd-eyebrow { margin-bottom: 8px; font-size: 9px !important; }
+.wd-studio-board-heading h2 { font-size: 28px; margin: 0; }
+.wd-studio-count { flex-shrink: 0; font-size: 10px; color: #8a4b69; border-radius: 20px; background: #fbe3ed; padding: 6px 9px; }
+.wd-studio-board-caption { color: #8a7494; font-size: 12px; margin: 9px 0 20px; }
+.wd-studio-board-columns { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.wd-studio-board-basics, .wd-studio-board-optional { display: grid; gap: 12px; min-width: 0; }
+.wd-board-slot { min-width: 0; padding: 8px; border: 1px solid #e7dbf1; border-radius: 12px; background: #fffdfb; box-shadow: 0 2px 5px #50234504; }
+.wd-board-slot-heading { margin-bottom: 8px; min-width: 0; }
+.wd-board-slot-label { display: inline-block; max-width: 100%; overflow-wrap: anywhere; border-radius: 6px; background: #efe3fc; padding: 4px 7px; color: #79558a; text-transform: uppercase; font-size: 9px; letter-spacing: .03em; }
+.wd-board-slot-label small { font-size: inherit; white-space: nowrap; }
+.wd-board-slot-heading h3 { font-size: 12px; line-height: 1.4; font-weight: 600; margin: 7px 0 0; overflow-wrap: anywhere; color: #49374d; }
+.wd-board-photo { position: relative; height: 172px; border-radius: 7px; overflow: hidden; background: #f6f1f4; }
+.wd-board-photo > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.wd-board-slot.is-dress .wd-board-photo { height: 365px; }
+.wd-studio-board-optional .wd-board-photo { height: 170px; }
+.wd-board-remove { position: absolute; right: 5px; top: 5px; width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid #fff; border-radius: 50%; background: #c83b53; color: #fff; font-size: 24px; line-height: 1; box-shadow: 0 2px 6px #50234520; }
+.wd-board-remove:hover { background: #a9263d; }
+.wd-board-remove:disabled { opacity: .6; cursor: wait; }
+.wd-board-placeholder { min-height: 128px; padding: 15px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; color: #ab91b3; font-size: 11px; }
+.wd-studio-board-optional .wd-board-placeholder { min-height: 104px; }
+.wd-board-slot.is-empty { background: #ffffff45; border: 1px dashed #d3bfdf; box-shadow: none; }
+.wd-board-slot.is-empty .wd-board-slot-label { background: #ffffff85; }
+.wd-board-photo-fallback { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #9e849e; font-size: 11px; }
+.wd-board-dress-note { display: block; margin-top: 7px; text-align: center; background: #eee2f9; color: #77528c; border-radius: 6px; padding: 5px; font-size: 10px; }
+.wd-board-store-note { font-size: 10px; color: #916b81; margin: 8px 0 0; }
+.wd-studio-reset { display: flex; align-items: center; justify-content: center; gap: 7px; width: fit-content; padding: 8px 12px; margin: 14px auto 0; border: 0; border-radius: 8px; background: transparent; color: #713b64; font-size: 12px; }
+.wd-studio-reset > span { font-size: 23px; line-height: 1; }
+.wd-studio-reset:hover:enabled { background: #ffffff70; }
+.wd-studio-reset:disabled { opacity: .45; }
+@media (max-width: 1180px) {
+  .wd-studio .wd-planner-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); grid-template-areas: 'picker board' 'selection selection'; }
+  .wd-studio-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wd-studio-forecast { grid-column: 1 / -1; }
+  .wd-studio-weather { justify-content: center; }
+  .wd-studio-weather > div { flex: 0 1 auto; }
+  .wd-studio-weather-tips { text-align: center; }
+  .wd-studio-weather-tips summary { margin-inline: auto; }
+}
+@media (max-width: 760px) {
+  .wd-studio { padding-top: 12px; }
+  .wd-studio .wd-planner-heading { margin: 18px 0 24px; }
+  .wd-studio .wd-planner-heading h1 { max-width: 400px; margin-inline: auto; font-size: 35px; }
+  .wd-studio .wd-planner-heading > p:last-child { font-size: 14px; }
+  .wd-studio-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wd-studio-field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .wd-studio-field { padding: 10px 12px; column-gap: 8px; }
+  .wd-studio .wd-planner-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'board' 'picker' 'selection'; gap: 16px; }
+  .wd-studio-board { padding: 20px 16px 14px; }
+  .wd-studio-board-heading h2 { font-size: 29px; }
+  .wd-studio-board-columns { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+  .wd-board-photo { height: 175px; }
+  .wd-studio .wd-picker-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(145px, 45%); overflow-x: auto; overflow-y: hidden; max-height: none; scroll-snap-type: x proximity; padding-bottom: 12px; }
+  .wd-studio .wd-picker-grid .wd-card { scroll-snap-align: start; }
+  .wd-studio .wd-picker-grid .wd-photo { height: 170px; }
+}
+@media (max-width: 380px) {
+  .wd-studio-board { padding-inline: 12px; }
+  .wd-studio-board-heading { align-items: flex-start; }
+  .wd-studio-board-heading h2 { font-size: 25px; }
+  .wd-studio-board-columns { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; }
+  .wd-studio-board-optional .wd-board-photo { height: 145px; }
+  .wd-studio-field { grid-template-columns: minmax(0, 1fr); }
+  .wd-studio-field > svg { display: none; }
+}
