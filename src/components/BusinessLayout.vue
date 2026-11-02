@@ -58,11 +58,10 @@ export default {
           <input id="biz-top-search" v-model.trim="search" type="search" maxlength="80" placeholder="Search customer requests…" />
         </form>
         <div class="biz-top-account">
-          <RouterLink :to="{ name: 'discover' }" class="biz-customer-link">View Customer Website <BusinessIcon name="arrow" :size="16" /></RouterLink>
           <button class="biz-avatar-button" type="button" :aria-expanded="menuOpen" aria-label="Account menu" @click="menuOpen = !menuOpen"><span class="biz-avatar">{{ initial }}</span><BusinessIcon name="chevron-down" :size="18" /></button>
           <div v-if="menuOpen" class="biz-account-menu">
             <RouterLink :to="{ name: 'business-profile' }">Business profile</RouterLink>
-            <RouterLink :to="{ name: 'discover' }" class="biz-customer-menu-link">View Customer Website</RouterLink>
+            <RouterLink :to="{ name: 'discover' }">View Customer Website</RouterLink>
             <button type="button" @click="signOut">Log out</button>
           </div>
         </div>

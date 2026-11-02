@@ -10,7 +10,7 @@ export default {
   },
   methods: {
     async signOut(){this.signingOut=true;this.logoutError='';try{await logout();this.$emit('signed-out');await this.$router.push({name:'login'})}catch(error){this.logoutError=error.message}finally{this.signingOut=false}},
-    async focusSearch(){const requests=String(this.$route.name||'').includes('request');const isCustomer=['consumer','customer'].includes(this.session?.role);const searchBusinessRequests=requests&&!isCustomer;await this.$router.push({name:searchBusinessRequests?'community-requests':'style-feed'});this.$nextTick(()=>document.getElementById(searchBusinessRequests?'request-search':'sf-page-title')?.focus())}
+    async focusSearch(){const requests=String(this.$route.name||'').includes('request');const businessRequests=requests&&this.session?.role==='business';await this.$router.push({name:businessRequests?'business-requests':'style-feed'});this.$nextTick(()=>document.getElementById(businessRequests?'request-list-search':'sf-page-title')?.focus())}
   }
 }
 </script>
