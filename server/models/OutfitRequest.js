@@ -14,6 +14,8 @@ const schema = new mongoose.Schema({
   acceptedAt: Date,
   purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestPurchase', default: null },
   fulfilledAt: Date,
+  expiredAt: { type: Date, default: null },
+  closedByCustomer: { type: Boolean, default: false },
   deletedAt: { type: Date, default: null },
   clientRequestId: { type: String, required: true }
 }, { timestamps: true, collection: 'outfit_requests' });

@@ -56,3 +56,53 @@ test('a successful new suggestion moves the request straight from Open to Replie
   assert.equal(view.tab, 'replied')
   assert.equal(view.selected.requestId, 'r1')
 })
+
+test('business inbox labels expired requests separately from ordinary closures', () => {
+  const view = page();
+  const base = { status: 'closed', deadline: '2000-01-01', myResponses: [], acceptedResponseId: null }
+  assert.equal(view.requestState({ ...base, expired: true }), 'Expired')
+  assert.equal(view.requestState({ ...base, expired: false }), 'Closed')
+  assert.equal(view.requestState({ ...base, fulfilled: true, acceptedResponseId: 'mine', myResponses: [{ responseId: 'mine' }] }), 'Purchased')
+})
+
+test('automatic refresh retains the second page of previously loaded replied history', async () => {
+  const old = mock.businessApi
+  try {
+    mock.businessApi = async uri => {
+      const url = new URL(uri, 'http://fake')
+      if (url.pathname !== '/requests') return { products: [] }
+      const tab = url.searchParams.get('tab'), page = Number(url.searchParams.get('page'))
+      if (tab === 'open') return { requests: [], total: 0, page: 1 }
+      const item = page === 1 ? 'recent' : 'older'
+      return { requests: [{ requestId: item, status: 'closed', deadline: '2099-01-01', consumerName: 'Jo',
+        occasion: 'Interview', budget: 100, myResponses: [{ responseId: item }], responseCount: 1 }], total: 14, page }
+    }
+    const view = page()
+    view.pages = { open: 1, replied: 2 }
+    view.tab = 'replied'; view.selectedId = 'older'
+    await view.load({ preservePages: true })
+    assert.deepEqual(Array.from(view.repliedRequests, r => r.requestId), ['recent','older'])
+    assert.equal(view.pages.replied, 2)
+    assert.equal(view.selected.requestId, 'older')
+  } finally { mock.businessApi = old }
+})
+
+test('dashboard request deep-link selects a requested item beyond the first inbox page', async () => {
+  const old = mock.businessApi
+  try {
+    mock.businessApi = async uri => {
+      const url = new URL(uri, 'http://fake')
+      if (url.pathname !== '/requests') return { products: [] }
+      const tab = url.searchParams.get('tab'), target = url.searchParams.get('requestId')
+      const candidate = { requestId: 'target-13', status: 'open', deadline: '2099-01-01',
+        consumerName: 'Customer', occasion: 'Interview', budget: 100, myResponses: [], responseCount: 0 }
+      if (target) return { requests: target === 'target-13' && tab === 'open' ? [candidate] : [], total: target && tab === 'open' ? 1 : 0, page: 1 }
+      return { requests: tab === 'open' ? [{ ...candidate, requestId: 'first-request' }] : [], total: tab === 'open' ? 13 : 0, page: 1 }
+    }
+    const view = page()
+    view.selectedId = 'target-13'; view.linkedRequestId = 'target-13'
+    await view.load()
+    assert.equal(view.tab, 'open')
+    assert.equal(view.selected.requestId, 'target-13')
+  } finally { mock.businessApi = old }
+})

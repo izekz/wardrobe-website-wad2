@@ -63,11 +63,12 @@ function tags(value, options, label) {
 function occasionInput(value) {
   return choice(normalizeOccasion(value), OCCASIONS, "occasion");
 }
-function itemInput(body = {}, requirePhoto = true, { allowLegacyStyles = false } = {}) {
+function itemInput(body = {}, requirePhoto = true, options = {}) {
+  const { allowLegacyStyles = false } = options;
   const result = {
     name: text(body.name, "Item name", 80),
     category: choice(body.category, CATEGORIES, "category"),
-    colour: choice(body.colour, COLOURS, "colour"),
+    colour: options.allowUnknownColour && body.colour === "Not specified" ? "Not specified" : choice(body.colour, COLOURS, "colour"),
     material: text(body.material, "Material", 50),
     // Only trusted legacy checkout conversion may carry retired product styles.
     style: tags(body.style, allowLegacyStyles ? [...STYLES, "Casual", "Formal", "Smart casual", "Cosplay"] : STYLES, "style"),

@@ -56,3 +56,21 @@ test('a feed with only one eligible opener still displays that post', () => {
   const organic = [{ _id: 'A' }];
   assert.deepEqual(randomizedFeed(organic, 'A', () => 0), organic);
 });
+
+test('too many promoted videos never form consecutive paid slots when organic clips exist', () => {
+  assert.deepEqual(interleave(['A', 'B', 'C', 'D'], ['S1', 'S2', 'S3', 'S4']),
+    ['A', 'B', 'C', 'S1', 'D']);
+  assert.deepEqual(interleave(['A', 'B'], ['S1', 'S2', 'S3']), ['A', 'B', 'S1']);
+  assert.deepEqual(interleave(['A', 'B', 'C', 'D', 'E', 'F', 'G'], ['S1', 'S2', 'S3', 'S4']),
+    ['A', 'B', 'C', 'S1', 'D', 'E', 'F', 'S2', 'G']);
+});
+
+test('oversubscribed sponsored slots prioritise campaigns with fewer impressions', () => {
+  const now = new Date(Date.now() + 3600000);
+  const organic = ['A','B','C'].map(_id => ({ _id }));
+  const older = { _id: 'older', boostedUntil: now, sponsoredImpressions: 30, boostBaseline: { sponsoredImpressions: 0 } };
+  const lessShown = { _id: 'less-shown', boostedUntil: now, sponsoredImpressions: 4, boostBaseline: { sponsoredImpressions: 2 } };
+  const feed = randomizedFeed([...organic, older, lessShown], '', () => 0);
+  assert.equal(feed.length, 4);
+  assert.equal(feed[3]._id, 'less-shown');
+});

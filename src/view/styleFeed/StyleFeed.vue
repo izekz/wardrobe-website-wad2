@@ -7,7 +7,7 @@ export default {
   data() {
     return {
       videos: [], activeIndex: 0, loading: true, error: '', interactionError: '',
-      likedBusy: '', muted: true, viewed: new Set(), impressed: new Set(), playbackProgress: {},
+      likedBusy: '', muted: true, viewed: new Set(), impressed: new Set(), playbackProgress: {}, observedPlayback: {},
       // Native trackpad/wheel scrolling is never locked. Remember when the
       // final card was reached so only a NEW downward gesture loops it.
       scrollSettleTimer: null, lastWheelAt: 0, bottomReachedAt: 0,
@@ -44,6 +44,7 @@ export default {
         this.viewed = new Set()
         this.impressed = new Set()
         this.playbackProgress = {}
+        this.observedPlayback = {}
         this.lastWheelAt = 0
         this.bottomReachedAt = 0
         try {
@@ -183,7 +184,16 @@ export default {
         this.playbackProgress[post.videoId] = Math.max(0, Math.min(100,
           video.currentTime / video.duration * 100))
       }
-      if (video.currentTime < 2 || this.viewed.has(post.videoId)) return
+      // Count actual playback rather than elapsed position. Seeking directly to
+      // 50% must not register a view without watching any of the clip.
+      const record = this.observedPlayback[post.videoId] || { lastTime: 0, watched: 0 }
+      const diff = video.currentTime - record.lastTime
+      if (!video.seeking && !video.paused && diff > 0 && diff <= 1.5) record.watched += diff
+      record.lastTime = video.currentTime
+      this.observedPlayback[post.videoId] = record
+      const threshold = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(2, video.duration / 2) : 2
+      if (record.watched < threshold || this.viewed.has(post.videoId)) return
       this.viewed.add(post.videoId)
       void this.track(post.videoId, 'view')
     },
@@ -193,6 +203,10 @@ export default {
       if (!video || !post || !Number.isFinite(video.duration) || video.duration <= 0) return
       const percent = Math.max(0, Math.min(100, Number(event.target.value) || 0))
       video.currentTime = video.duration * percent / 100
+      // Seeking changes the position, not the amount actually watched.
+      const record = this.observedPlayback[post.videoId] || { lastTime: 0, watched: 0 }
+      record.lastTime = video.currentTime
+      this.observedPlayback[post.videoId] = record
       this.playbackProgress[post.videoId] = percent
     },
     togglePlayback(event) {

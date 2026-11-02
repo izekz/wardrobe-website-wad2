@@ -4,6 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse, compileTemplate, compileScript } from 'vue/compiler-sfc'
+import { spawnSync } from 'node:child_process'
 
 const sourceRoot = path.resolve('src')
 const routeRoot = path.join(sourceRoot, 'router')
@@ -42,6 +43,10 @@ function walk(dir) {
         const { descriptor, errors } = parse(source, { filename: file })
         for (const err of errors) issues.push(`${file}: ${err.message}`)
         if (descriptor.scriptSetup) compileScript(descriptor, { id: file })
+        if (descriptor.script) {
+          const check = spawnSync(process.execPath, ['--check', '--input-type=module'], { input: descriptor.script.content, encoding: 'utf8' })
+          if (check.status !== 0) issues.push(`${file}: ${check.stderr.trim()}`)
+        }
         if (descriptor.template) {
           const output = compileTemplate({ filename: file, source: descriptor.template.content, id: file })
           for (const err of output.errors) issues.push(`${file}: ${err.message}`)
