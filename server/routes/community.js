@@ -23,9 +23,12 @@ function createCommunityRouter(models = defaultModels, transact) {
   router.put('/listings/:id', requireCustomer, controller.updateListing);
   router.patch('/listings/:id/status', requireCustomer, controller.setListingStatus);
   router.delete('/listings/:id', requireCustomer, controller.deleteListing);
+  router.get('/requests/profiles', controller.getRequestProfiles);
   router.get('/requests', controller.getRequests);
   router.post('/requests', requireCustomer, controller.createRequest);
   router.get('/requests/:id', controller.getRequest);
+  router.get('/requests/:id/contacts', controller.getContacts);
+  router.post('/requests/:id/contacts', controller.sendContact);
   router.patch('/requests/:id/status', requireCustomer, controller.setRequestStatus);
   router.delete('/requests/:id', requireCustomer, controller.deleteRequest);
   router.post('/requests/:id/responses/:responseId/accept', requireCustomer, commerce.accept);

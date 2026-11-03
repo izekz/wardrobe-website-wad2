@@ -52,7 +52,7 @@ test('Personal history, expiry, recovery, and late checkout have consistent serv
     const listing = await req('/requests', 'seller');
     assert.equal(listing.status, 200);
     assert.equal(listing.body.total, 1, 'businesses may discover open requests');
-    assert.equal((await req('/requests?status=closed', 'seller')).status, 403);
+    assert.equal((await req('/requests?status=closed', 'seller')).status, 200);
   });
   await t.test('After acceptance, customers may switch away from sold-out product and complete checkout after original deadline', async () => {
     assert.equal((await req(path(replies[0]) + '/accept', 'a', 'POST', {})).status, 200);
@@ -98,8 +98,8 @@ test('Personal history, expiry, recovery, and late checkout have consistent serv
     const row = mine.body.requests.find(item => item.requestId === String(overdue._id));
     assert.equal(row.status, 'closed'); assert.equal(row.expired, true);
     const other = await req('/requests', 'seller');
-    assert.equal(other.body.requests.some(item => item.requestId === String(overdue._id)), false);
-    assert.equal((await req(`/requests/${overdue._id}`, 'seller')).status, 404);
+    assert.equal(other.body.requests.some(item => item.requestId === String(overdue._id)), true, 'businesses can browse expired community requests');
+    assert.equal((await req(`/requests/${overdue._id}`, 'seller')).status, 200);
   });
   await t.test('Manually closing a request stops new replies but does not void earlier suggestions', async () => {
     const closed = await models.Request.create({ consumerId: String(a._id), consumerName: 'A', title: 'Graduation outfit',

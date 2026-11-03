@@ -15,7 +15,7 @@ const env = {
   module: { exports: {} },
   communityApi: async (uri) => {
     calls.push(uri)
-    return { requests: [], total: 0, page: 1, pageSize: 12 }
+    return uri.startsWith('/requests/profiles') ? { profiles: [{ consumerId: 'a', consumerName: 'Alex', requestCount: 2 }], total: 1, page: 1, pageSize: 8 } : { requests: [], total: 0, page: 1, pageSize: 12 }
   },
   queryString: filters => new URLSearchParams(filters).toString(),
   styles: ['Casual'], money: v => String(v), today: () => '2026-10-21', readableDate: v => v,
@@ -30,6 +30,7 @@ function page(role, routeQuery = {}) {
   actor.user = { id: 'test-user', role }
   const instance = { $route: { query: routeQuery }, ...component.data.call({ $route: { query: routeQuery } }) }
   Object.defineProperty(instance, 'canPost', { get: () => component.computed.canPost.call(instance) })
+  Object.defineProperty(instance, 'isBusiness', { get: () => component.computed.isBusiness.call(instance) })
   for (const [key, method] of Object.entries(component.methods)) instance[key] = method.bind(instance)
   return instance
 }
@@ -51,10 +52,12 @@ test('customer sees open and closed requests together, regardless of old status 
   assert.equal(params.get('status'), null)
 })
 
-test('business-facing discovery filters were retired from the customer-only page', () => {
-  assert.doesNotMatch(source, /request-toolbar|request-status-filter|request-style-filter/)
+test('businesses can browse requests while customers retain a personal-only view', () => {
   const routes = fs.readFileSync(path.join(root, 'src/router/communityRoutes.js'), 'utf8')
-  assert.match(routes, /role === 'business'.*business-requests/)
+  assert.doesNotMatch(routes, /role === 'business'.*business-requests/)
+  assert.match(source, /statusFilter: 'all'/)
+  assert.match(source, /isBusiness/)
+  assert.match(source, /Closed \/ Expired/)
 })
 
 test('customer page has no status dropdown or manual refresh; closed section is history', () => {
@@ -66,4 +69,15 @@ test('customer page has no status dropdown or manual refresh; closed section is 
   assert.doesNotMatch(source, />All requests<\/button>/)
   const requestCard = fs.readFileSync(path.join(root, 'src/components/RequestCard.vue'), 'utf8')
   assert.match(requestCard, /v-if="!personal"/)
+})
+
+test('business community page loads customer profiles, while customer page remains personal', async () => {
+  const business = page('business')
+  await business.loadRequests()
+  assert.ok(calls.at(-1).startsWith('/requests/profiles?'))
+  assert.equal(business.profiles[0].consumerName, 'Alex')
+  assert.equal(business.total, 1)
+  assert.match(source, /View customer requests/)
+  assert.match(source, /request-board-readonly/)
+  assert.doesNotMatch(source, /My Open \/ Replied inbox/)
 })
