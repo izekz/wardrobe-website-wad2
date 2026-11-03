@@ -76,7 +76,7 @@ test('Signed-in Community ownership and request history', async t => {
   });
   await t.test('All requests sorts every open result ahead of closed results across pages and profiles', async () => {
     await api(`/requests/${request.requestId}/status`, { method: 'PATCH', body: { status: 'closed' } });
-    // Inserted directly: only the first 5 open requests are free through the API, and paging needs 13.
+    // Seed additional requests directly to test sorting and pagination.
     for (let i = 0; i < 13; i++) await models.Request.create({ ...requestInput({ title: `Older open request ${i}` }), consumerId: String(alice._id), consumerName: alice.name });
     const closed = models.Request.rows.find(row => String(row._id) === request.requestId);
     closed.createdAt = new Date('2100-01-01');
@@ -101,8 +101,7 @@ test('Signed-in Community ownership and request history', async t => {
     const mine = await api('/requests', { actor: 'bob' });
     assert.equal(mine.body.total, 7);
     assert.equal(mine.body.wallet, undefined);
-    assert.equal((await api('/credits', { actor: 'bob' })).status, 410);
-    assert.equal((await api('/credits/purchase', { actor: 'bob', method: 'POST', body: { credits: 50 } })).status, 410);
+    assert.equal(require('../models/User').schema.path('credits'), undefined, 'retired credit field is no longer part of new accounts');
     const closed = await api(`/requests/${saved[0]}/status`, { actor: 'bob', method: 'PATCH', body: { status: 'closed' } });
     assert.equal(closed.status, 200);
     const reopened = await api(`/requests/${saved[0]}/status`, { actor: 'bob', method: 'PATCH', body: { status: 'open' } });

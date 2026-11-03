@@ -36,8 +36,6 @@ function page(role, routeQuery = {}) {
 
 test('customer sees only own requests even with an all-requests URL', async () => {
   const customer = page('customer', { mine: 'false' })
-  customer.filters.search = 'other person'
-  customer.filters.style = 'Vintage'
   await customer.loadRequests()
   const url = calls.at(-1)
   assert.equal(new URL(url, 'http://local').searchParams.get('mine'), 'true')
@@ -47,29 +45,23 @@ test('customer sees only own requests even with an all-requests URL', async () =
 
 test('customer sees open and closed requests together, regardless of old status filter', async () => {
   const customer = page('consumer')
-  customer.filters.status = 'closed'
   await customer.loadRequests(1)
   const params = new URL(calls.at(-1), 'http://local').searchParams
   assert.equal(params.get('mine'), 'true')
   assert.equal(params.get('status'), null)
 })
 
-test('business still has access to discovery filters across customer requests', async () => {
-  const business = page('business')
-  business.filters.search = 'dress'
-  business.filters.status = 'open'
-  await business.loadRequests(1)
-  const params = new URL(calls.at(-1), 'http://local').searchParams
-  assert.equal(params.get('mine'), null)
-  assert.equal(params.get('search'), 'dress')
-  assert.equal(params.get('status'), 'open')
+test('business-facing discovery filters were retired from the customer-only page', () => {
+  assert.doesNotMatch(source, /request-toolbar|request-status-filter|request-style-filter/)
+  const routes = fs.readFileSync(path.join(root, 'src/router/communityRoutes.js'), 'utf8')
+  assert.match(routes, /role === 'business'.*business-requests/)
 })
 
 test('customer page has no status dropdown or manual refresh; closed section is history', () => {
   assert.doesNotMatch(source, /request-toolbar-customer/)
   assert.doesNotMatch(source, /All my requests/)
   assert.doesNotMatch(source, /Refresh requests/)
-  assert.match(source, /'History'/)
+  assert.match(source, />History<\/p>/)
   assert.match(source, /@delete-request="deleteRequest"/)
   assert.doesNotMatch(source, />All requests<\/button>/)
   const requestCard = fs.readFileSync(path.join(root, 'src/components/RequestCard.vue'), 'utf8')

@@ -180,10 +180,10 @@ function createBusinessController(models = defaultModels) {
     const input = rules.productInput(req.body, { photoRequired: false });
     if (!input.photo) delete input.photo;
     if (!input.sizePhoto) delete input.sizePhoto;
-    const wasAvailable = product.status === 'active' && product.stock > 0;
+    const wasAvailable = product.status === 'active';
     product.set(input);
     await product.save();
-    const isAvailable = product.status === 'active' && product.stock > 0;
+    const isAvailable = product.status === 'active';
     if (StyleVideo && wasAvailable !== isAvailable) {
       await syncProductBoosts(StyleVideo, product._id, isAvailable);
     }

@@ -7,7 +7,7 @@ const blankRequest = () => ({ title: '', occasion: '', budget: '', preferredStyl
 export default {
   components: { CommunityIcon, RequestCard },
   data() { return { requests: [], total: 0, page: 1, pageSize: 12, loading: false, loadVersion: 0, error: '', formError: '', posting: false, styles, form: blankRequest(),
-    refreshError: '', deletingId: '', deleteError: '', filters: { search: '', style: '', status: '' }, clientRequestId: crypto.randomUUID() } },
+    refreshError: '', deletingId: '', deleteError: '', clientRequestId: crypto.randomUUID() } },
   computed: {
     canPost() { return ['consumer', 'customer'].includes(authState.user?.role) }, minimumDate() { return today() },
   },
@@ -29,9 +29,8 @@ export default {
       if (!quiet) this.loading = true
       this.error = ''; this.refreshError = ''
       try {
-        // Customers see only their own requests. The business board continues to
-        // expose the full request pool, which businesses need to answer.
-        const filters = this.canPost ? { mine: true, page } : { ...this.filters, page }
+        // This page is customer-only; businesses use the functional Open/Replied inbox.
+        const filters = { mine: true, page }
         const result = await communityApi(`/requests?${queryString(filters)}`)
         if (version !== this.loadVersion) return
         this.requests = result.requests; this.total = result.total; this.page = result.page; this.pageSize = result.pageSize
@@ -64,27 +63,22 @@ export default {
 </script>
 <template>
   <section class="request-board-page" aria-labelledby="request-board-heading">
-        <div class="request-board-layout" :class="{ 'request-board-readonly': !canPost }">
+        <div class="request-board-layout">
       <div class="request-board-content">
         <div class="request-board-heading">
-          <h1 id="request-board-heading">{{ canPost ? 'My outfit requests' : 'Outfit request board' }}</h1>
-          <p>{{ canPost ? 'Keep track of your requests and suggestions from businesses.' : 'Browse customers’ requests and discover what they need.' }}</p>
+          <h1 id="request-board-heading">My outfit requests</h1>
+          <p>Keep track of your requests and suggestions from businesses.</p>
         </div>
 
-        <form v-if="!canPost" class="request-toolbar" @submit.prevent="loadRequests(1)">
-          <div class="community-select-wrap"><label for="request-status-filter" class="visually-hidden">Request status</label><select id="request-status-filter" v-model="filters.status" class="community-select" @change="loadRequests(1)"><option value="">Open &amp; closed</option><option value="open">Open only</option><option value="closed">Closed only</option></select></div>
-          <div class="community-search"><button type="submit" aria-label="Search requests"><CommunityIcon name="search" /></button><label for="request-search" class="visually-hidden">Search requests</label><input id="request-search" v-model.trim="filters.search" maxlength="80" type="search" placeholder="Search requests (e.g. jacket, dress)" @change="loadRequests(1)" /></div>
-          <div class="community-select-wrap"><label for="request-style-filter" class="visually-hidden">Filter requests by style</label><select id="request-style-filter" v-model="filters.style" class="community-select" @change="loadRequests(1)"><option value="">All styles</option><option v-for="style in styles" :key="style">{{ style }}</option></select><CommunityIcon name="chevron" :size="16" /></div>
-        </form>
         <p v-if="refreshError || deleteError" class="community-error" role="alert">{{ deleteError || refreshError }}</p>
         <p v-if="loading" role="status" class="community-loading">Loading community requests…</p>
         <div v-else-if="error" class="community-error" role="alert">{{ error }} <button class="community-text-button" @click="loadRequests(page)">Try again</button></div>
         <template v-else>
-          <p class="visually-hidden" role="status">{{ total }} {{ canPost ? 'of your requests' : 'requests' }}</p>
-          <div v-if="!requests.length" class="community-empty"><CommunityIcon name="hanger" :size="44" /><h2>{{ canPost ? 'Your next outfit starts here' : 'No requests found' }}</h2><p>{{ canPost ? 'You haven’t posted any requests yet.' : 'No matching requests yet.' }}</p><a v-if="canPost" href="#request-title" class="community-text-button" @click.prevent="$refs.requestTitle.focus()">Create a request <CommunityIcon name="arrow" /></a></div>
+          <p class="visually-hidden" role="status">{{ total }} of your requests</p>
+          <div v-if="!requests.length" class="community-empty"><CommunityIcon name="hanger" :size="44" /><h2>Your next outfit starts here</h2><p>You haven’t posted any requests yet.</p><a v-if="canPost" href="#request-title" class="community-text-button" @click.prevent="$refs.requestTitle.focus()">Create a request <CommunityIcon name="arrow" /></a></div>
           <template v-for="(request, index) in requests" :key="request.requestId">
-            <p v-if="request.status === 'closed' && (index === 0 || requests[index - 1].status !== 'closed')" class="request-section-divider">{{ canPost ? 'History' : 'Closed requests' }}</p>
-            <RequestCard :request="request" :index="index" :personal="canPost" :deleting="deletingId === request.requestId" @delete-request="deleteRequest" />
+            <p v-if="request.status === 'closed' && (index === 0 || requests[index - 1].status !== 'closed')" class="request-section-divider">History</p>
+            <RequestCard :request="request" :index="index" :personal="true" :deleting="deletingId === request.requestId" @delete-request="deleteRequest" />
           </template>
           <nav v-if="total > pageSize" class="community-pagination" aria-label="Request pages"><button class="community-btn community-btn-outline" :disabled="page === 1" @click="loadRequests(page - 1)">Previous</button><span>Page {{ page }}</span><button class="community-btn community-btn-outline" :disabled="page * pageSize >= total" @click="loadRequests(page + 1)">Next</button></nav>
         </template>

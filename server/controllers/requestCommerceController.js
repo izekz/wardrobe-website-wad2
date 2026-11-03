@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const { singaporeToday } = require('../communityValidation');
 const wardrobeValidation = require('../services/wardrobeValidation');
 const { listedColours } = require('../services/listedColours');
-const { syncProductBoosts } = require('../services/styleBoostAvailability');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function receipt(doc) {
   return {
@@ -13,7 +12,7 @@ function receipt(doc) {
   };
 }
 function createRequestCommerceController(models, transact = work => mongoose.connection.transaction(work)) {
-  const { Request, Response, Product, Item, Purchase, StyleVideo } = models;
+  const { Request, Response, Product, Item, Purchase } = models;
   function ids(req) {
     if (!mongoose.isObjectIdOrHexString(req.params.id) ||
       (req.params.responseId && !mongoose.isObjectIdOrHexString(req.params.responseId))) {
@@ -115,11 +114,8 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       const stocked = await Product.findOneAndUpdate({ _id: product._id, status: 'active', price: product.price, stock: { $gte: 1 } },
         { $inc: { stock: -1 } }, { returnDocument: 'after', runValidators: true, session });
       if (!stocked) throw fail(409, 'The stock or price changed. Refresh and choose an available item.');
-      // The last-unit purchase pauses prepaid Style Feed promotion in the same
-      // MongoDB transaction as the stock decrement, receipt, and wardrobe item.
-      if (StyleVideo && stocked.stock === 0) {
-        await syncProductBoosts(StyleVideo, product._id, false, { session });
-      }
+      // Sold-out products stay in Style Feed for brand awareness. Checkout
+      // prevents further purchases, but does not pause a running video boost.
       const [item] = await Item.create([{ ...clothing, userId: req.communityActor.id, size,
         sourceProductId: String(product._id), purchaseId: String(purchaseId),
         photo: { data: product.photo.data, contentType: product.photo.contentType },
