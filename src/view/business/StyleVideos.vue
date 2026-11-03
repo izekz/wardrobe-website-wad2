@@ -55,11 +55,10 @@ export default {
       finally { this.busy = '' }
     },
     async remove(post) {
-      if (post.boostRemainingMs > 0) {
-        this.error = 'This video still has unused paid promotion time. You can delete it after the promotion finishes.'
-        return
-      }
-      if (!window.confirm('Delete this video permanently?')) return
+      const message = post.boostRemainingMs > 0
+        ? 'Delete this video permanently? Its paid boost will end immediately, and its video statistics will be removed. Any remaining promotion time and coins spent will not be refunded.'
+        : 'Delete this video permanently?'
+      if (!window.confirm(message)) return
       this.busy = post.videoId; this.error = ''; this.success = ''
       try { await styleFeedApi(`/${post.videoId}`, { method: 'DELETE' }); this.success = 'Video deleted.'; await this.load() }
       catch (error) { this.error = error.message }
@@ -109,7 +108,7 @@ export default {
               </div>
             </div>
             <p v-if="!post.productListed" class="biz-muted small">This product is hidden. The video is not in the public feed and unused promotion time is paused.</p><p v-else-if="!post.productAvailable" class="biz-muted small">Sold out · video stays in the Style Feed for discovery. Customers can view the listing but cannot purchase until restocked.</p>
-            <div class="sf-item-actions"><button type="button" class="biz-btn biz-btn-pink" :disabled="busy !== '' || coins < boostCoins || !post.productAvailable" @click="boost(post)">{{ post.boosted ? 'Extend boost' : 'Boost video' }} · {{ boostCoins }} coins</button><button type="button" class="biz-btn" :disabled="busy !== '' || post.boostRemainingMs > 0" :title="post.boostRemainingMs > 0 ? 'Available after the paid promotion finishes' : 'Delete video'" @click="remove(post)">Delete video</button></div>
+            <div class="sf-item-actions"><button type="button" class="biz-btn biz-btn-pink" :disabled="busy !== '' || coins < boostCoins || !post.productAvailable" @click="boost(post)">{{ post.boosted ? 'Extend boost' : 'Boost video' }} · {{ boostCoins }} coins</button><button type="button" class="biz-btn" :disabled="busy !== ''" title="Delete video" @click="remove(post)">Delete video</button></div>
           </div>
         </article>
       </div>

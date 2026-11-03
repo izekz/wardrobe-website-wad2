@@ -208,9 +208,9 @@ router.get('/:id/video', async (req, res) => {
 
 router.delete('/:id', requireBusiness, trustedBrowser, async (req, res) => {
   const { video } = await ownedVideo(req);
-  if (remainingBoostMs(video) > 0) {
-    throw error(409, 'This video still has unused paid promotion time. Keep it until the boost finishes.');
-  }
+  // Deleting a video is always the owner's choice, including during an active
+  // or paused paid campaign. The video and remaining promotion are removed;
+  // past coin transactions remain in the wallet history (no automatic refund).
   await video.deleteOne();
   res.json({ message: 'Video deleted.' });
 });
