@@ -121,6 +121,19 @@ export function addToCart(product, { size = '', colour = '', quantity = 1 } = {}
     await persistCart(lines, ctx)
   })
 }
+// Editing a cart link replaces its original line; it does not add another purchase.
+export function updateCartItem(key, product, { size = '', colour = '', quantity = 1 } = {}) {
+  return mutate(async ctx => {
+    if (!key || !Number.isInteger(quantity) || quantity < 1 || quantity > 10)
+      throw new Error('Choose an available quantity between 1 and 10.');
+    const result = await request('/cart/' + encodeURIComponent(key), {
+      method: 'PUT', body: JSON.stringify({ productId: String(product.productId), size, colour, quantity }),
+    }, ctx);
+    if (!Array.isArray(result.cart) || typeof result.key !== 'string') throw new Error('Unexpected cart response. Please refresh your cart.');
+    shopState.cart = result.cart;
+    return result.cart.find(item => item.key === result.key);
+  });
+}
 export function updateCartQuantity(key, quantity) {
   return mutate(async ctx => {
     const lines = shopState.cart.map(item => ({ ...item })), item = lines.find(item => item.key === key)

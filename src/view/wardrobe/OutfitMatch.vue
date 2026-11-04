@@ -78,7 +78,7 @@ const availablePieces = computed(() => candidates.value.filter(piece =>
 ));
 const chosenPieces = computed(() => candidates.value.filter(isSelected));
 const storeTrayPieces = computed(() => [...new Map([...products.value, ...unavailableStoreProducts.value]
-  .map(piece => [storeVariantKey(piece), piece])).values()]);
+  .map(piece => [storeVariantKey(piece), piece])).values()].filter(piece => !isSelected(piece)));
 const boardGroups = computed(() => {
   const dress = chosenPieces.value.some(piece => piece.category === "Dresses");
   const labels = { Tops: "Top", Bottoms: "Bottom", Dresses: "Dress", Shoes: "Shoes", Jackets: "Outerwear", Accessories: "Accessory" };
@@ -410,14 +410,14 @@ watch(() => plannerProductsState.ownerId, owner => {
         <p>Use a store piece alongside your wardrobe.</p>
       </header>
       <ul class="wd-store-product-scroll" tabindex="0" aria-label="Store products — scroll horizontally">
-        <li v-for="piece in storeTrayPieces" :key="storeVariantKey(piece)" class="wd-store-product-card" :class="{ 'is-selected': isSelected(piece), 'is-unavailable': piece.missing }" :data-piece-key="pieceKey(piece)">
+        <li v-for="piece in storeTrayPieces" :key="storeVariantKey(piece)" class="wd-store-product-card" :class="{ 'is-unavailable': piece.missing }" :data-piece-key="pieceKey(piece)">
           <div class="wd-store-product-content">
             <div class="wd-store-product-photo">
               <img v-if="!piece.missing && piece.imageURL && !failedPhotos[photoKey(piece)]" :src="piece.imageURL" :alt="piece.name" loading="lazy" @error="failedPhotos[photoKey(piece)] = true" />
               <span v-else><CommunityIcon name="hanger" :size="23" /><small>Photo unavailable</small></span>
             </div>
             <div class="wd-store-product-copy">
-              <h3 :title="piece.name">{{ piece.name }}</h3>
+              <h3 :title="piece.name"><RouterLink v-if="!piece.missing" class="wd-store-product-link" :to="{ name: 'discover-product', params: { productId: piece.productId }, query: { fromPlanner: '1', plannerKey: storeVariantKey(piece), colour: piece.colour || '', size: piece.size || '' } }" :aria-label="`View product details: ${piece.name}`">{{ piece.name }}</RouterLink><template v-else>{{ piece.name }}</template></h3>
               <p v-if="piece.businessName" class="wd-store-product-business">{{ piece.businessName }}</p>
               <p class="wd-store-product-options"><span v-if="Number.isFinite(piece.price)">S${{ piece.price.toFixed(2) }}</span><span v-if="piece.colour">{{ piece.colour }}</span><span v-if="piece.size">Size {{ piece.size }}</span></p>
               <p v-if="piece.missing" class="wd-store-product-unavailable">No longer available</p>
@@ -425,7 +425,7 @@ watch(() => plannerProductsState.ownerId, owner => {
             </div>
           </div>
           <div class="wd-store-product-actions">
-            <button type="button" class="wd-store-use-piece" :class="{ 'is-selected': isSelected(piece) }" :aria-label="`${isSelected(piece) ? 'Remove from outfit' : 'Use this piece'}: ${piece.name}`" :aria-pressed="isSelected(piece)" :disabled="saving || busy || piece.missing || plannerProductsState.pending > 0" @click="togglePiece(piece)"><CommunityIcon :name="isSelected(piece) ? 'close' : 'plus'" :size="14" />{{ isSelected(piece) ? 'Remove from outfit' : 'Use this piece' }}</button>
+            <button type="button" class="wd-store-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving || busy || piece.missing || plannerProductsState.pending > 0" @click="placePiece(piece, $event)"><CommunityIcon name="plus" :size="14" />Use this piece</button>
             <button type="button" class="wd-remove-store" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || busy || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="14" />Remove from planner</button>
           </div>
         </li>

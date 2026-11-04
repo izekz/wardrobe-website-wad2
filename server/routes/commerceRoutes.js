@@ -18,6 +18,7 @@ function createCommerceRouter(models) {
   router.get('/shop', run(shopping.getShop));
   router.put('/likes/:productId', trustedBrowser, run(shopping.setLike));
   router.put('/cart', trustedBrowser, run(shopping.setCart));
+  router.put('/cart/:key', trustedBrowser, run(shopping.updateCartItem));
   router.post('/checkout', trustedBrowser, run(checkout));
   router.use((error, req, res, next) => {
     if (res.headersSent) return next(error);

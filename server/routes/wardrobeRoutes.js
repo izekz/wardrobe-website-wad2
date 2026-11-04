@@ -14,6 +14,7 @@ function createWardrobeRouter(models, weatherProvider, colourProvider) {
   });
   router.get("/planner-products", c.plannerProducts);
   router.post("/planner-products", trustedBrowser, c.addPlannerProduct);
+  router.put("/planner-products/:key", trustedBrowser, c.updatePlannerProduct);
   router.delete("/planner-products/:key", trustedBrowser, c.removePlannerProduct);
   router.get("/items", c.list);
   router.post("/items", trustedBrowser, c.create);

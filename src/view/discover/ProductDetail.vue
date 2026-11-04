@@ -2,8 +2,8 @@
 import '../../assets/styles/discover.css'
 import { catalogApi, money } from '../../services/catalogApi'
 import { authState } from '../../services/authService'
-import { isLiked, toggleLike, addToCart, shopState } from '../../services/shopService'
-import { plannerProductsState, hydratePlannerProducts, addPlannerProduct, storeVariantKey } from '../../services/wardrobeService'
+import { isLiked, toggleLike, addToCart, updateCartItem, shopState } from '../../services/shopService'
+import { plannerProductsState, hydratePlannerProducts, addPlannerProduct, updatePlannerProduct, storeVariantKey } from '../../services/wardrobeService'
 import CommunityIcon from '../../components/CommunityIcon.vue'
 import RequestSuggestionAction from '../../components/RequestSuggestionAction.vue'
 import SkipFeedback from '../../components/SkipFeedback.vue'
@@ -12,6 +12,10 @@ export default {
   components:{CommunityIcon,SkipFeedback,RequestSuggestionAction,ReportDialog},
   data(){return{reportOpen:false,product:null,business:null,loading:true,error:'',size:'',colour:'',shoppingBusy:false,skipping:false,toast:'',cartSelectionNotice:'',plannerBusy:false,plannerMessage:'',plannerError:'',loadVersion:0,activeImage:0,quantity:1}},
   computed:{plannerState(){return plannerProductsState},
+    editingCart(){return !this.isSuggestion&&this.$route.query.fromCart==='1'},
+    editingPlanner(){return !this.isSuggestion&&this.$route.query.fromPlanner==='1'},
+    cartSourceKey(){return this.originalKey('cart')},
+    plannerSourceKey(){return this.originalKey('planner')},
     plannerAdded(){return !!this.product&&plannerProductsState.products.some(piece=>piece.available&&storeVariantKey(piece)===storeVariantKey({productId:this.product.productId,colour:this.colour,size:this.size}))},
     canPlan(){return this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)},
     saved(){return !!this.product&&isLiked(this.product.productId)},shoppingReady(){return shopState.ready&&!shopState.loading&&!shopState.pending},
@@ -42,6 +46,14 @@ watch: {
   },
 },
   methods:{money,
+    originalKey(source) {
+      const query=this.$route.query, explicit=query[source+'Key'];
+      if(explicit!==undefined)return typeof explicit==='string'?explicit:'';
+      // Preserve old cart/planner links made before explicit source keys were added.
+      if((query.colour!==undefined&&typeof query.colour!=='string')||(query.size!==undefined&&typeof query.size!=='string'))return '';
+      const productId=this.$route.params.productId,colour=query.colour||'',size=query.size||'';
+      return source==='cart'?`${productId}:${size}:${colour}`:`${productId}:${colour}:${size}`;
+    },
     async load(){const v=++this.loadVersion;this.loading=true;this.error='';this.activeImage=0;this.cartSelectionNotice='';this.plannerMessage='';this.plannerError='';try{const r=await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`);if(v!==this.loadVersion)return;this.product=r.product;this.business=r.business;this.restoreSelections();if(this.isShopper)void hydratePlannerProducts().catch(()=>{})}catch(e){if(v===this.loadVersion)this.error=e.message}finally{if(v===this.loadVersion)this.loading=false}},
     restoreSelections() {
       const sizes = this.product.sizes || []
@@ -49,7 +61,7 @@ watch: {
       this.size = sizes.length === 1 && this.sizeLeft(sizes[0]) > 0 ? sizes[0] : ''
       this.quantity = 1
       this.cartSelectionNotice = ''
-      if (this.isSuggestion || this.$route.query.fromCart !== '1') return
+      if (this.isSuggestion || (this.$route.query.fromCart !== '1' && this.$route.query.fromPlanner !== '1')) return
 
       // URL values are only form defaults; current catalogue options and stock take priority.
       const { colour, size, quantity } = this.$route.query, notices = []
@@ -67,7 +79,7 @@ watch: {
           notices.push(`Your saved size is no longer available.${sizes.length ? ' Choose another size.' : ''}`)
         }
       }
-      if (quantity != null) {
+      if (this.$route.query.fromCart === '1' && quantity != null) {
         const requested = typeof quantity === 'string' && quantity.trim() ? Number(quantity) : NaN
         if (Number.isSafeInteger(requested) && requested > 0) {
           this.quantity = Math.max(1, Math.min(requested, this.selectedStock, 10))
@@ -77,15 +89,37 @@ watch: {
       this.cartSelectionNotice = notices.join(' ')
     },
     async save(){if(this.shoppingBusy)return;this.shoppingBusy=true;try{const liked=await toggleLike(this.product.productId);this.flash(liked?'Added to Likes.':'Removed from Likes.')}catch(e){if(e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}finally{this.shoppingBusy=false}},
-    async addCart(){if(this.shoppingBusy||!this.canCart)return;this.shoppingBusy=true;try{await addToCart(this.product,{size:this.size,colour:this.colour,quantity:this.quantity});this.flash('Added to cart.')}catch(e){if(e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}finally{this.shoppingBusy=false}},
+    async addCart(){
+      if(this.shoppingBusy||this.plannerBusy||!this.canCart)return;
+      const version=this.loadVersion,productId=this.product.productId,sourceKey=this.cartSourceKey,editing=this.editingCart;
+      const options={size:this.size,colour:this.colour,quantity:this.quantity};
+      this.shoppingBusy=true;
+      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&this.editingCart===editing&&this.cartSourceKey===sourceKey;
+      try{
+        if(editing){
+          const updated=await updateCartItem(sourceKey,this.product,options);
+          if(samePage()){
+            await this.$router.replace({query:{...this.$route.query,cartKey:updated.key,colour:updated.colour,size:updated.size,quantity:String(updated.quantity)}});
+            this.flash('Cart item updated.');
+          }
+        }else{await addToCart(this.product,options);if(samePage())this.flash('Added to cart.')}
+      }catch(e){if(samePage()&&e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}
+      finally{this.shoppingBusy=false}
+    },
     async addToPlanner(){
-      if(this.plannerBusy||!this.canPlan)return;
-      const version=this.loadVersion,productId=this.product.productId,colour=this.colour,size=this.size;
+      if(this.plannerBusy||this.shoppingBusy||!this.canPlan)return;
+      const version=this.loadVersion,productId=this.product.productId,colour=this.colour,size=this.size,sourceKey=this.plannerSourceKey,editing=this.editingPlanner;
+      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&this.editingPlanner===editing&&this.plannerSourceKey===sourceKey;
       this.plannerBusy=true;this.plannerMessage='';this.plannerError='';
       try{
-        await addPlannerProduct(this.product,{colour,size});
-        if(version===this.loadVersion&&this.product?.productId===productId&&this.colour===colour&&this.size===size)this.plannerMessage='Added to your planner.';
-      }catch(error){if(version===this.loadVersion&&error.code!=='ACCOUNT_CHANGED')this.plannerError=error.message}
+        if(editing){
+          const result=await updatePlannerProduct(sourceKey,this.product,{colour,size});
+          if(samePage()){
+            await this.$router.replace({query:{...this.$route.query,plannerKey:result.key,colour,size}});
+            this.plannerMessage='Planner item updated.';
+          }
+        }else{await addPlannerProduct(this.product,{colour,size});if(samePage())this.plannerMessage='Added to your planner.'}
+      }catch(error){if(samePage()&&error.code!=='ACCOUNT_CHANGED')this.plannerError=error.message}
       finally{this.plannerBusy=false}
     },
     flash(m){this.toast=m;clearTimeout(this.toastTimer);this.toastTimer=setTimeout(()=>this.toast='',2600)},
@@ -104,8 +138,8 @@ watch: {
 
   <p v-if="cartSelectionNotice" class="checkout-demo-note" role="status">{{ cartSelectionNotice }}</p>
   <div v-if="isSuggestion" class="disc-option-block"><p v-if="availableColours.length" class="community-muted mb-1">Available colours: {{ availableColours.join(', ') }}</p><p class="community-muted small mb-0">Choose your size and colour once at checkout if you accept this suggestion.</p></div>
-  <div v-else-if="availableColours.length" class="disc-option-block"><div class="disc-option-label"><label for="detail-colour">Colour</label><span>{{colour||'Choose one'}}</span></div><select id="detail-colour" v-model="colour" class="form-select"><option disabled value="">Choose a colour</option><option v-for="c in availableColours" :key="c">{{c}}</option></select></div>
-  <fieldset v-if="!isSuggestion&&product.sizes?.length" class="disc-option-block"><div class="disc-option-label"><legend>{{product.category==='Shoes'?'Size (US)':'Size'}}</legend><button v-if="product.sizeImageURL" type="button" class="disc-size-link" @click="activeImage=1"><span class="disc-info-dot" aria-hidden="true">i</span><span>Size guide</span></button></div><div class="disc-sizes"><button v-for="item in product.sizes" :key="item" type="button" :class="{selected:size===item,'size-sold-out':sizeLeft(item)===0}" :disabled="sizeLeft(item)===0" :aria-label="sizeLeft(item)===0?`${item}, sold out`:item" @click="size=item">{{item}}<small v-if="sizeLeft(item)===0">Sold out</small></button></div></fieldset>
+  <div v-else-if="availableColours.length" class="disc-option-block"><div class="disc-option-label"><label for="detail-colour">Colour</label><span>{{colour||'Choose one'}}</span></div><select id="detail-colour" v-model="colour" :disabled="shoppingBusy||plannerBusy" class="form-select"><option disabled value="">Choose a colour</option><option v-for="c in availableColours" :key="c">{{c}}</option></select></div>
+  <fieldset v-if="!isSuggestion&&product.sizes?.length" class="disc-option-block"><div class="disc-option-label"><legend>{{product.category==='Shoes'?'Size (US)':'Size'}}</legend><button v-if="product.sizeImageURL" type="button" class="disc-size-link" @click="activeImage=1"><span class="disc-info-dot" aria-hidden="true">i</span><span>Size guide</span></button></div><div class="disc-sizes"><button v-for="item in product.sizes" :key="item" type="button" :class="{selected:size===item,'size-sold-out':sizeLeft(item)===0}" :disabled="sizeLeft(item)===0||shoppingBusy||plannerBusy" :aria-label="sizeLeft(item)===0?`${item}, sold out`:item" @click="size=item">{{item}}<small v-if="sizeLeft(item)===0">Sold out</small></button></div></fieldset>
   <div class="disc-stock-line"><span v-if="product.stock===0" class="disc-out-stock">Out of stock</span><span v-else-if="size&&selectedStock===0" class="disc-out-stock">Size {{size}} is sold out</span><span v-else-if="selectedStock<=3">Only {{selectedStock}} left{{size?` in size ${size}`:''}}</span><span v-else>In stock</span></div>
   <RequestSuggestionAction :product="product"/>
 
@@ -139,9 +173,9 @@ watch: {
   target-type="listing"
   @close="reportOpen = false"
 />
-  <div v-if="isShopper&&!isSuggestion" class="disc-buy-row"><select v-model.number="quantity" aria-label="Quantity"><option v-for="n in Math.min(selectedStock,10)" :key="n" :value="n">Qty {{n}}</option></select><button class="community-btn disc-add-cart" :disabled="!canCart||shoppingBusy" @click="addCart">Add to cart</button></div>
+  <div v-if="isShopper&&!isSuggestion" class="disc-buy-row"><select v-model.number="quantity" :disabled="shoppingBusy||plannerBusy" aria-label="Quantity"><option v-for="n in Math.min(selectedStock,10)" :key="n" :value="n">Qty {{n}}</option></select><button class="community-btn disc-add-cart" :disabled="!canCart||shoppingBusy||plannerBusy" @click="addCart">{{shoppingBusy?'Saving…':editingCart?'Update cart item':'Add to cart'}}</button></div>
   <div class="disc-actions"><div v-if="wardrobeRoute&&isShopper&&!isSuggestion" class="disc-planner-action">
-    <button type="button" class="community-btn community-btn-outline" :disabled="!canPlan||plannerBusy||plannerState.pending>0||plannerAdded" @click="addToPlanner"><CommunityIcon name="hanger" :size="21"/>{{plannerBusy?'Adding…':plannerAdded?'Added to Outfit Planner':'Add to Outfit Planner'}}</button>
+    <button type="button" class="community-btn community-btn-outline" :disabled="!canPlan||shoppingBusy||plannerBusy||plannerState.pending>0||(!editingPlanner&&plannerAdded)" @click="addToPlanner"><CommunityIcon name="hanger" :size="21"/>{{plannerBusy?'Saving…':editingPlanner?'Update planner item':plannerAdded?'Added to Outfit Planner':'Add to Outfit Planner'}}</button>
     <p class="community-muted small mb-0 mt-2">See how this piece works with clothes you already own.</p>
     <p v-if="plannerMessage" role="status" class="small mt-2 mb-0">{{plannerMessage}}</p>
     <p v-if="plannerError" role="alert" class="community-error small mt-2 mb-0">{{plannerError}}</p>

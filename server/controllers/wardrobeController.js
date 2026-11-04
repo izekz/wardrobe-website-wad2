@@ -130,6 +130,24 @@ function createWardrobeController(
     if (!updated) throw v.badRequest('Your planner can hold up to 30 store products. Remove one before adding another.');
     res.json(await plannerJson(updated));
   }
+  async function updatePlannerProduct(req, res) {
+    const filter = plannerOwner(req), ref = productRefs({ products: [req.body] })[0];
+    const user = await User.findOne(filter).select('+plannerProducts');
+    if (!user) return res.status(404).json({ message: 'Account not found.' });
+    const previous = (user.plannerProducts || []).map(piece => ({ productId: piece.productId, colour: piece.colour || '', size: piece.size || '' }));
+    const source = previous.find(piece => productKey(piece) === req.params.key);
+    if (!source) throw Object.assign(new Error('This planner item changed or was removed. Reopen it from your planner.'), { status: 409 });
+    if (String(source.productId) !== ref.productId) throw v.badRequest('Update the same product already in your planner.');
+    const piece = await storeProduct(ref.productId, ref.colour, ref.size, true);
+    const entry = { productId: source.productId, colour: piece.colour, size: piece.size };
+    // Replace the original variant; collapse a matching destination rather than duplicating it.
+    const entries = previous.filter(item => productKey(item) !== productKey(source) && productKey(item) !== productKey(entry));
+    entries.splice(Math.min(previous.indexOf(source), entries.length), 0, entry);
+    const updated = await User.findOneAndUpdate({ ...filter, plannerProducts: user.plannerProducts },
+      { $set: { plannerProducts: entries } }, { new: true, runValidators: true, projection: { plannerProducts: 1 } });
+    if (!updated) throw Object.assign(new Error('Your planner changed in another tab. Refresh and try again.'), { status: 409 });
+    res.json({ ...await plannerJson(updated), key: productKey(entry) });
+  }
   async function removePlannerProduct(req, res) {
     const filter = plannerOwner(req), user = await User.findOne(filter).select('+plannerProducts');
     if (!user) return res.status(404).json({ message: 'Account not found.' });
@@ -378,7 +396,7 @@ function createWardrobeController(
     res.json({ message: "Outfit removed." });
   }
   return {
-    plannerProducts, addPlannerProduct, removePlannerProduct,
+    plannerProducts, addPlannerProduct, updatePlannerProduct, removePlannerProduct,
     list,
     get,
     create,

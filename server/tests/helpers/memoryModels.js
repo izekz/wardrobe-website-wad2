@@ -6,6 +6,7 @@ function matches(doc, filter = {}) {
     if (key === '$and') return value.every(part => matches(doc, part));
     const actual = key.split('.').reduce((target, field) => target?.[field], doc);
     if (value === null) return actual == null;
+    if (Array.isArray(value)) return JSON.stringify(actual) === JSON.stringify(value);
     if (value && typeof value === 'object' && !value._bsontype && !(value instanceof Date)) {
       return Object.entries(value).every(([operator, operand]) => {
         if (operator === '$in') return operand.some(item => String(item) === String(actual));

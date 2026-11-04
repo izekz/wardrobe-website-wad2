@@ -203,4 +203,7 @@ function mutatePlanner(path, options) {
 export function addPlannerProduct(product, { colour = '', size = '' } = {}) {
   return mutatePlanner('', send('POST', { productId: product.productId, colour, size }));
 }
+export function updatePlannerProduct(key, product, { colour = '', size = '' } = {}) {
+  return mutatePlanner('/' + encodeURIComponent(key), send('PUT', { productId: product.productId, colour, size }));
+}
 export function removePlannerProduct(key) { return mutatePlanner('/' + encodeURIComponent(key), { method: 'DELETE' }); }
