@@ -69,7 +69,7 @@ export default {
 </script>
 <template>
   <section class="sf-manager">
-    <div class="biz-page-head"><div><span class="sf-eyebrow">Business creator tools</span><h1>Style Feed studio</h1><p>Show your outfits in motion. Every video links to one of your existing products.</p></div><RouterLink :to="{ name: 'style-feed' }" class="biz-btn">Watch Style Feed →</RouterLink></div>
+    <div class="biz-page-head"><div><span class="sf-eyebrow">Business creator tools</span><h1>Style Feed studio</h1><p>Show your outfits in motion. Every video links to one of your existing products.</p></div></div>
     <p v-if="loading" role="status">Loading your creator studio…</p>
     <p v-if="error" role="alert" class="biz-error">{{ error }}</p>
     <p v-if="success" role="status" class="biz-success">{{ success }}</p>

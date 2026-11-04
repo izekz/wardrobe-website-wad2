@@ -61,7 +61,6 @@ export default {
           <button class="biz-avatar-button" type="button" :aria-expanded="menuOpen" aria-label="Account menu" @click="menuOpen = !menuOpen"><span class="biz-avatar">{{ initial }}</span><BusinessIcon name="chevron-down" :size="18" /></button>
           <div v-if="menuOpen" class="biz-account-menu">
             <RouterLink :to="{ name: 'business-profile' }">Business profile</RouterLink>
-            <RouterLink :to="{ name: 'discover' }">View Customer Website</RouterLink>
             <button type="button" @click="signOut">Log out</button>
           </div>
         </div>

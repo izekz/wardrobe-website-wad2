@@ -112,7 +112,10 @@ export function addToCart(product, { size = '', colour = '', quantity = 1 } = {}
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10 || !product.stock) throw new Error('Choose an available quantity between 1 and 10.')
     const line = { productId: String(product.productId), size, colour, quantity }
     const lines = shopState.cart.map(item => ({ ...item })), existing = lines.find(item => item.key === lineKey(line))
-    const amount = Math.min(10, Number(product.stock), quantity + (existing?.quantity || 0))
+    // Person 4: the limit is the stock of the chosen size (older listings share one stock).
+    const max = Number((product.sizeStock && size ? product.sizeStock[size] : product.stock) || 0)
+    if (!max) throw new Error('This size is sold out.')
+    const amount = Math.min(10, max, quantity + (existing?.quantity || 0))
     if (existing) existing.quantity = amount
     else lines.push({ ...line, quantity: amount })
     await persistCart(lines, ctx)
