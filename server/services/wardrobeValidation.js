@@ -1,4 +1,4 @@
-const { inferSuitability, normalizeOccasion } = require("./clothingSuitability");
+const { inferSuitability, normalizeOccasion, NO_OCCASION } = require("./clothingSuitability");
 const {
   text,
   choice,
@@ -61,14 +61,16 @@ function tags(value, options, label) {
   return [...new Set(value)];
 }
 function occasionInput(value) {
-  return choice(normalizeOccasion(value), OCCASIONS, "occasion");
+  return choice(normalizeOccasion(value), [...OCCASIONS, NO_OCCASION], "occasion");
 }
 function itemInput(body = {}, requirePhoto = true, options = {}) {
   const { allowLegacyStyles = false } = options;
+  const selectedColours = body.colours === undefined ? null : tags(body.colours, COLOURS.filter(colour => colour !== 'Multicolour'), 'colour');
   const result = {
     name: text(body.name, "Item name", 80),
     category: choice(body.category, CATEGORIES, "category"),
-    colour: options.allowUnknownColour && body.colour === "Not specified" ? "Not specified" : choice(body.colour, COLOURS, "colour"),
+    colour: selectedColours ? selectedColours[0] : options.allowUnknownColour && body.colour === "Not specified" ? "Not specified" : choice(body.colour, COLOURS, "colour"),
+    colours: selectedColours || (COLOURS.includes(body.colour) && body.colour !== 'Multicolour' ? [body.colour] : []),
     material: text(body.material, "Material", 50),
     // Only trusted legacy checkout conversion may carry retired product styles.
     style: tags(body.style, allowLegacyStyles ? [...STYLES, "Casual", "Formal", "Smart casual", "Cosplay"] : STYLES, "style"),

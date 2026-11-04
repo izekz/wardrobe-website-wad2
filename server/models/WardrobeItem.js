@@ -11,7 +11,8 @@ const schema = new mongoose.Schema(
       enum: ["Tops", "Bottoms", "Jackets", "Dresses", "Shoes", "Accessories"],
       required: true,
     },
-    colour: { type: String, required: true, maxlength: 30 },
+    colour: { type: String, required: true, maxlength: 30 }, // First colour retained for older integrations.
+    colours: { type: [{ type: String, enum: ['White','Black','Beige','Cream','Grey','Brown','Navy','Blue','Pink','Purple','Green','Red','Yellow','Orange'] }], default: undefined },
     style: [String],
     material: { type: String, required: true, maxlength: 50 },
     occasions: [String],

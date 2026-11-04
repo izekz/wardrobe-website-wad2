@@ -97,7 +97,7 @@ test('business product create/edit persists metadata, keeps photos and passes tr
     const material = result.body.selection.scoreDetails.itemDetails[0].components.find(c => c.label === 'Material');
     assert.equal(material.available, true);
     assert.equal(material.provided, true);
-    assert.equal(material.earned, 2);
+    assert.equal(material.earned, 4);
     assert.equal(result.body.selection.comments.some(c => /adding.*material/i.test(c.text)), false);
   }
   const legacy = await models.Product.create({ ...productInput(details, { photoRequired: true }), businessId: String(models.Business.rows[0]._id), businessName: 'shop' });

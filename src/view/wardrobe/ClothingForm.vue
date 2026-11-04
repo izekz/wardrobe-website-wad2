@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import "../../assets/styles/wardrobe.css";
 import {
@@ -7,7 +7,8 @@ import {
   send,
   readPhoto,
   categories,
-  colours,
+  wardrobeColours,
+  clothingColours,
   styles,
   categoryName,
 } from "../../services/wardrobeService";
@@ -18,15 +19,17 @@ const route = useRoute(),
   busy = ref(false),
   error = ref(""),
   hasLegacyStyles = ref(false),
+  hasLegacyColours = ref(false),
   preview = ref(""),
   photo = ref(undefined);
 const form = ref({
   name: "",
   category: "Tops",
-  colour: "White",
+  colours: [],
   material: "",
   style: [],
 });
+watch(() => form.value.colours.length, count => { if (count && error.value === 'Choose at least one colour.') error.value = ''; });
 let alive = true,
   photoVersion = 0;
 onBeforeUnmount(() => {
@@ -38,6 +41,8 @@ onMounted(async () => {
     const item = (await wardrobeApi("/items/" + route.params.id)).item;
     if (!alive) return;
     for (const key of Object.keys(form.value)) form.value[key] = item[key];
+    form.value.colours = clothingColours(item).filter(colour => wardrobeColours.includes(colour));
+    hasLegacyColours.value = item.colour === 'Multicolour' && !form.value.colours.length;
     hasLegacyStyles.value = form.value.style.some(style => !styles.includes(style));
     form.value.style = form.value.style.filter(style => styles.includes(style));
     preview.value = item.imageURL;
@@ -65,6 +70,10 @@ async function submit() {
   error.value = "";
   if (!editing && !photo.value) {
     error.value = "Choose a clothing photo.";
+    return;
+  }
+  if (!form.value.colours.length) {
+    error.value = "Choose at least one colour.";
     return;
   }
   if (!form.value.style.length) {
@@ -151,14 +160,19 @@ async function submit() {
                   {{ categoryName(c) }}
                 </option>
               </select></label
-            ><label
-              ><span class="wd-field-label"
-                >Colour
-                <span class="wd-required" aria-hidden="true">*</span></span
-              ><select v-model="form.colour" required>
-                <option v-for="c in colours" :key="c">{{ c }}</option>
-              </select></label
-            ><label
+            >
+            <fieldset class="wd-colour-field">
+              <legend class="wd-field-label">Colours <span class="wd-required" aria-hidden="true">*</span></legend>
+              <details class="wd-colour-picker">
+                <summary>{{ form.colours.length ? form.colours.join(', ') : 'Select colours' }}</summary>
+                <div class="wd-colour-options" role="group" aria-label="Clothing colours">
+                  <label v-for="value in wardrobeColours" :key="value"><input type="checkbox" v-model="form.colours" :value="value" />{{ value }}</label>
+                </div>
+              </details>
+              <small>Select every colour on this item.</small>
+              <p v-if="hasLegacyColours" class="wd-basics-note">This item has an older Multicolour label. Select its actual colours before saving.</p>
+            </fieldset>
+            <label
               ><span class="wd-field-label"
                 >Material
                 <span class="wd-required" aria-hidden="true">*</span></span

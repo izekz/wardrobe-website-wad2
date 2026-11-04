@@ -9,6 +9,7 @@ const piece = new mongoose.Schema(
     name: String,
     category: String,
     colour: String,
+    colours: { type: [String], default: undefined },
     style: [String],
     occasions: [String],
     source: { type: String, enum: ["wardrobe", "store"] },

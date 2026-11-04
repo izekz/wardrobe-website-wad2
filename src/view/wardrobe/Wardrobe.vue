@@ -10,6 +10,7 @@ import {
   categories,
   styles,
   colours,
+  clothingColours,
   categoryName,
   matchesSearch,
 } from "../../services/wardrobeService";
@@ -29,13 +30,13 @@ const filtered = computed(() =>
     (i) =>
       (!category.value || i.category === category.value) &&
       (!style.value || i.style.includes(style.value)) &&
-      (!colour.value || i.colour === colour.value) &&
+      (!colour.value || clothingColours(i).includes(colour.value)) &&
       matchesSearch(
         [
           i.name,
           i.category,
           categoryName(i.category),
-          i.colour,
+          clothingColours(i),
           i.style,
           i.material,
           i.occasions,

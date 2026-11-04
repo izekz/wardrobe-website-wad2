@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed } from "vue";
-import { categoryName } from "../services/wardrobeService";
+import { categoryName, clothingColours } from "../services/wardrobeService";
 const props = defineProps({
   item: Object,
   index: { type: Number, default: 0 },
@@ -26,14 +26,15 @@ const colourPalette = {
     "#d6b9d0",
   ],
 };
-const colourTagStyle = computed(() => {
-  const [background, color, border] = colourPalette[props.item.colour] || [
+const displayedColours = computed(() => clothingColours(props.item));
+const colourTagStyle = colour => {
+  const [background, color, border] = colourPalette[colour] || [
     "#eee5f6",
     "#443547",
     "#dfd2e8",
   ];
   return { background, color, border: `1px solid ${border}` };
-});
+};
 const failed = ref(false);
 watch(
   () => props.item.imageURL,
@@ -61,9 +62,7 @@ watch(
         <span :class="`wd-category-${item.category.toLowerCase()}`">{{
           categoryName(item.category)
         }}</span
-        ><span v-if="item.colour" :style="colourTagStyle">{{
-          item.colour
-        }}</span>
+        ><span v-for="colour in displayedColours" :key="colour" :style="colourTagStyle(colour)">{{ colour }}</span>
       </div>
       <slot />
     </div>

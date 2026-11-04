@@ -1,3 +1,9 @@
+const NO_OCCASION = 'No specific occasion';
+const namedColours = ['White','Black','Beige','Cream','Grey','Brown','Navy','Blue','Pink','Purple','Green','Red','Yellow','Orange'];
+function itemColours(item) {
+  const values = item?.source === 'store' ? [item.colour] : Array.isArray(item?.colours) && item.colours.length ? item.colours : [item?.colour];
+  return [...new Set(values.map(value => namedColours.find(colour => colour.toLowerCase() === String(value || '').trim().toLowerCase())).filter(Boolean))];
+}
 // Explainable estimates from clothing metadata. No user-supplied occasion/weather labels are trusted.
 function normalizeOccasion(value) {
   return ({ Work: "Internship / work", "Casual outing": "Casual outings", "Formal dinner": "Formal events" })[value] || value;
@@ -10,9 +16,8 @@ function inferSuitability(item) {
       : [];
   const has = (...tags) => tags.some((tag) => style.includes(tag));
   const material = (item.material || "").toLowerCase();
-  const category = item.category,
-    colour = (item.colour || "").toLowerCase();
-  const neutral = [
+  const category = item.category, colours = itemColours(item);
+  const neutral = colours.length > 0 && colours.every(colour => [
     "white",
     "black",
     "beige",
@@ -20,7 +25,7 @@ function inferSuitability(item) {
     "grey",
     "brown",
     "navy",
-  ].includes(colour);
+  ].includes(colour.toLowerCase()));
   const relaxedFabric = /denim|jersey|fleece|sweat|rubber/.test(material);
   const knownFabric =
     /cotton|linen|silk|wool|polyester|viscose|rayon|leather|nylon/.test(
@@ -79,4 +84,4 @@ function inferSuitability(item) {
     weather.add("Rainy");
   return { occasions: [...occasions], weather: [...weather] };
 }
-module.exports = { inferSuitability, normalizeOccasion };
+module.exports = { inferSuitability, normalizeOccasion, itemColours, NO_OCCASION };

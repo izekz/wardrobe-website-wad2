@@ -365,7 +365,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
         [top.itemId],
       );
       assert.equal(partial.body.selection.complete, false);
-      assert.equal(partial.body.selection.matchScore, 76);
+      assert.equal(partial.body.selection.matchScore, 69);
       assert.equal(partial.body.selection.scoreDetails.penalty, 0);
       assert.deepEqual(partial.body.selection.basics, {
         selected: 1,
@@ -377,7 +377,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
         itemIds: [top.itemId, bottom.itemId, shoes.itemId],
       });
       assert.equal(full.body.selection.complete, true);
-      assert.equal(full.body.selection.matchScore, 80);
+      assert.equal(full.body.selection.matchScore, 77);
       assert.deepEqual(full.body.selection.basics, {
         selected: 3,
         total: 3,
@@ -695,13 +695,13 @@ test("partial occasion points, unavailable checks and preferences have independe
   const { matchRating, occasionRating } = require("../services/outfitMatching");
   const shirt = { name: "Store shirt", category: "Tops", style: ["Minimalist"] };
   const occasion = occasionRating(shirt, "Presentation");
-  assert.equal(occasion.earned, 28); // 18 style + 10 category; unknown colour/material earn no occasion points.
-  assert.equal(matchRating([shirt], "Presentation", [], weather).matchScore, 47);
-  assert.equal(matchRating([shirt], "Presentation", ["Formal"], weather).matchScore, 47);
+  assert.equal(occasion.earned, 24); // 18/30 converted to 24/40 style points; category adds nothing.
+  assert.equal(matchRating([shirt], "Presentation", [], weather).matchScore, 40);
+  assert.equal(matchRating([shirt], "Presentation", ["Formal"], weather).matchScore, 40);
   assert.equal(matchRating([shirt], "Presentation", [], weather).scoreDetails.availableWeight, 60);
   const linen = { ...shirt, colour: "White", material: "Linen" };
   const partial = matchRating([linen], "Presentation", [], weather, ["Bottoms", "Shoes"]);
-  assert.equal(partial.matchScore, 76); // (42 occasion + 15 weather) / 75.
+  assert.equal(partial.matchScore, 69); // (42 occasion + 10 material-only weather) / 75.
   assert.equal(partial.scoreDetails.penalty, 0);
   assert.equal(partial.scoreDetails.provisional, true);
   assert.equal(partial.scoreDetails.components.find(c => c.label === "Colour coordination").available, false);
@@ -717,13 +717,15 @@ test("partial occasion points, unavailable checks and preferences have independe
   assert.deepEqual(matchRating([cached], "Presentation", [], weather), matchRating([linen], "Presentation", [], weather));
 });
 
-test("weather evaluates fabric and category without rewarding accessories or unknown materials", () => {
+test("weather uses materials consistently across categories and skips unknown information", () => {
   const { weatherRating } = require("../services/outfitMatching");
-  assert.equal(weatherRating({ category: "Tops", material: "Linen" }, weather).ratio, 1);
+  assert.equal(weatherRating({ category: "Tops", material: "Linen" }, weather).ratio, 2 / 3);
   assert.equal(weatherRating({ category: "Tops", material: "Heavy fleece" }, weather).ratio, 0);
-  assert.equal(weatherRating({ category: "Shoes", material: "Rubber" }, weather).ratio, 1);
-  assert.equal(weatherRating({ category: "Shoes", material: "Leather" }, weather).ratio, 2 / 3);
-  assert.equal(weatherRating({ category: "Accessories", material: "Rubber" }, weather), null);
+  assert.equal(weatherRating({ category: "Shoes", material: "Rubber" }, weather).ratio, 2 / 3);
+  assert.equal(weatherRating({ category: "Shoes", material: "Leather" }, weather).ratio, 0.5);
+  assert.equal(weatherRating({ category: "Accessories", material: "Rubber" }, weather).ratio, 2 / 3);
+  for (const category of ["Tops", "Bottoms", "Jackets", "Shoes", "Dresses", "Accessories"])
+    assert.deepEqual(weatherRating({ name: 'Same material', category, material: "Linen" }, weather), weatherRating({ name: 'Same material', category: "Tops", material: "Linen" }, weather));
   assert.equal(weatherRating({ category: "Tops", material: "Unknown" }, weather), null);
   assert.equal(weatherRating({ category: "Tops", material: "Linen" }, { available: false }), null);
 });
@@ -900,9 +902,9 @@ test("wardrobe taxonomy, Romantic scoring and legacy compatibility use current d
   assert.deepEqual(STYLES, ["Minimalist", "Streetwear", "Vintage", "Y2K", "Preppy", "Classic", "Romantic"]);
   assert.deepEqual(OCCASIONS, ["University", "Presentation", "Interview", "Date", "Internship / work", "Casual outings", "Formal events"]);
   const romantic = { name: "Silk dress", category: "Dresses", colour: "Pink", material: "Silk", style: ["Romantic"] };
-  assert.equal(occasionRating(romantic, "Date").components[0].earned, 30);
-  assert.equal(occasionRating(romantic, "Interview").components[0].earned, 6);
-  assert.equal(occasionRating(romantic, "Formal events").components[0].earned, 27);
+  assert.equal(occasionRating(romantic, "Date").components[0].earned, 40);
+  assert.equal(occasionRating(romantic, "Interview").components[0].earned, 8);
+  assert.equal(occasionRating(romantic, "Formal events").components[0].earned, 36);
   assert.equal(recommendationFor(romantic, { occasion: "Date" }).kind, "occasion");
   assert.equal(recommendationFor(romantic, { occasion: "Interview", styles: ["Romantic"] }).kind, "style");
   for (const occasion of OCCASIONS) for (const style of STYLES) {
@@ -921,7 +923,7 @@ test("wardrobe taxonomy, Romantic scoring and legacy compatibility use current d
     assert.ok(assessSelection([romantic], old, [], weather));
   }
   const legacy = { ...romantic, style: ["Formal"] };
-  assert.equal(occasionRating(legacy, "Interview").components[0].earned, 30);
+  assert.equal(occasionRating(legacy, "Interview").components[0].earned, 40);
   assert.throws(() => itemInput(legacy, false));
   assert.doesNotThrow(() => itemInput(legacy, false, { allowLegacyStyles: true }));
 });
@@ -931,7 +933,7 @@ test("entered plastic and unfamiliar materials are not reported as missing", () 
   const shoe = { name: "ASICS shoe", category: "Shoes", colour: "Black", style: ["Minimalist"], material: "plastic" };
   for (const material of ["plastic", " Plastic ", "PLASTIC"]) {
     const piece = { ...shoe, material };
-    for (const [occasion, points] of [["Presentation", 2], ["Casual outings", 4]]) {
+    for (const [occasion, points] of [["Presentation", 4], ["Casual outings", 8]]) {
       const selection = assessSelection([piece], occasion, [], weather);
       const component = selection.scoreDetails.itemDetails[0].components.find(c => c.label === "Material");
       assert.equal(component.provided, true);
@@ -954,6 +956,6 @@ test("entered plastic and unfamiliar materials are not reported as missing", () 
     const missing = assessSelection([{ ...shoe, material }], "Presentation", [], weather);
     assert.ok(missing.comments.some(c => c.text === "Try adding material details for ASICS shoe."));
   }
-  assert.equal(occasionRating({ ...shoe, material: "Rubber" }, "Presentation").components.find(c => c.label === "Material").earned, 2);
-  assert.equal(weatherRating({ ...shoe, material: "Waterproof plastic" }, weather).ratio, 1);
+  assert.equal(occasionRating({ ...shoe, material: "Rubber" }, "Presentation").components.find(c => c.label === "Material").earned, 4);
+  assert.equal(weatherRating({ ...shoe, material: "Waterproof plastic" }, weather).ratio, 2 / 3);
 });

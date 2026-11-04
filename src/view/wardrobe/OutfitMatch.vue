@@ -9,6 +9,8 @@ import {
   send,
   today,
   occasions,
+  noOccasion,
+  clothingColours,
   styles,
   categories,
   categoryName,
@@ -42,6 +44,7 @@ const candidateRefs = ref([]), unavailableStoreProducts = ref([]);
 function noteEdit(message) { if (!editNotices.value.includes(message)) editNotices.value.push(message); }
 const productId = computed(() => !isEditing.value && typeof route.query.productId === 'string' ? route.query.productId : undefined);
 const productColour = computed(() => !isEditing.value && typeof route.query.colour === 'string' ? route.query.colour : undefined);
+const freeStyling = computed(() => occasion.value === noOccasion);
 const candidates = computed(() =>
   [...items.value, ...products.value].sort((a, b) =>
     (b.recommendation?.priority || 0) - (a.recommendation?.priority || 0) ||
@@ -71,7 +74,7 @@ const pickerCategories = [{ value: "", label: "All" }, ...categories.map(value =
 const availablePieces = computed(() => candidates.value.filter(piece =>
   piece.source === "wardrobe" &&
   !isSelected(piece) && (!category.value || piece.category === category.value) &&
-  matchesSearch([piece.name, piece.category, categoryName(piece.category), piece.colour, piece.style, piece.material], search.value),
+  matchesSearch([piece.name, piece.category, categoryName(piece.category), clothingColours(piece), piece.style, piece.material], search.value),
 ));
 const chosenPieces = computed(() => candidates.value.filter(isSelected));
 const storeTrayPieces = computed(() => [...new Map([...products.value, ...unavailableStoreProducts.value]
@@ -130,7 +133,7 @@ const scoreTone = computed(() =>
   score.value >= 75 ? "good" : score.value >= 50 ? "fair" : "poor",
 );
 const scoreLabel = computed(() =>
-  scoreTone.value === "good"
+  freeStyling.value && selection.value?.scoreDetails.provisional ? "Provisional" : scoreTone.value === "good"
     ? "Good match"
     : scoreTone.value === "fair"
       ? "Room to improve"
@@ -536,7 +539,7 @@ watch(() => plannerProductsState.ownerId, owner => {
           <p id="wd-selection-title" tabindex="-1" class="wd-selection-label">Your selection</p>
           <div class="wd-summary-title">
             <h2>
-              {{ occasion }} {{ selection?.complete ? "ready" : "outfit" }}
+              {{ freeStyling ? 'Your styled outfit' : `${occasion} ${selection?.complete ? 'ready' : 'outfit'}` }}
             </h2>
             <div
               v-if="selection && chosenCount"
@@ -556,7 +559,7 @@ watch(() => plannerProductsState.ownerId, owner => {
           </div>
           <div class="wd-match-progress" aria-live="polite">
             <div class="wd-progress-label">
-              <strong>Selected outfit match</strong
+              <strong>{{ freeStyling ? "Styling match" : "Selected outfit match" }}</strong
               ><span>{{
                 scoring
                   ? "Calculating…"
@@ -588,7 +591,7 @@ watch(() => plannerProductsState.ownerId, owner => {
             </p>
             <p v-else>
               Based on your {{ chosenCount }} selected {{ chosenCount === 1 ? "piece" : "pieces" }}.
-              <span v-if="selection?.scoreDetails.provisional">This is a provisional score for one piece.</span>
+              <span v-if="selection?.scoreDetails.provisional">{{ freeStyling ? chosenCount < 2 ? 'Choose another piece for a colour and style comparison. This score is provisional.' : 'Some colour or style details cannot be compared. This score is provisional.' : 'This is a provisional score for one piece.' }}</span>
             </p>
           </div>
           <ul v-if="selection?.comments?.length" class="wd-reasons">
@@ -682,7 +685,7 @@ watch(() => plannerProductsState.ownerId, owner => {
           <details class="wd-score-guide" aria-label="Matching score explanation">
             <summary>How your match score works</summary>
             <p class="wd-score-formula">
-              Occasion 60 + Colour coordination 25 + Weather 15
+              {{ freeStyling ? 'Colour coordination 50 + Style harmony 50' : 'Occasion 60 + Colour coordination 25 + Weather 15' }}
             </p>
             <div v-if="selection" class="wd-score-breakdown">
               <div
@@ -702,9 +705,11 @@ watch(() => plannerProductsState.ownerId, owner => {
               completeness is shown separately. Unavailable checks are left out.
               Selected outfits have a minimum display score of 5. This minimum is not a bonus.
             </p>
-            <p>Occasion points per piece: Style 30 + Category 15 + Colour 10 + Material 5.
-              Each property earns partial points independently. The outfit uses their average.</p>
-            <details v-if="selection" class="wd-item-score-details">
+            <p v-if="!freeStyling">Occasion points per piece: Style 40 + Colour 10 + Material 10.
+              Each property earns partial points independently. The outfit uses their average. Category does not add match points.</p>
+            <p v-else>With no specific occasion, the score compares your selected clothes' colours and style tags. Shared styles earn 100%, related styles 70% and contrasting styles 30%. Each garment pair has equal weight. Weather and materials do not add points in this mode.</p>
+            <p><template v-if="!freeStyling">For multi-coloured items, occasion colour points average all selected colours. </template>Colour coordination averages every colour combination between two garments, then averages the garment pairs.</p>
+            <details v-if="selection && !freeStyling" class="wd-item-score-details">
               <summary>Points for each selected piece</summary>
               <section v-for="item in selection.scoreDetails.itemDetails" :key="item.itemId || item.name">
                 <strong>{{ item.name }} · {{ item.earned }} / 60 occasion points</strong>
@@ -715,15 +720,21 @@ watch(() => plannerProductsState.ownerId, owner => {
               <p>Colour pairs: neutral 100%, same or compatible 67%, other known pairs 20%.
                 Compatible pairs include existing matches and complementary or analogous palettes from The Color API.
                 Palette matching allows nearby shades; unavailable palettes use the existing colour rules.
-                Weather checks earn full, half or zero points for temperature and rain. Unknown checks are left out.</p>
+                Weather checks use material, with temperature weighted 10 and rain weighted 5. Unknown checks are left out. Clothing category does not change these points.</p>
             </details>
             <details v-if="selection?.scoreDetails.colourDetails?.length" class="wd-item-score-details">
               <summary>Colour pair points</summary>
               <section v-for="(pair, index) in selection.scoreDetails.colourDetails" :key="index">
                 <strong>{{ pair.colours.join(' + ') }} · {{ pair.points }} / 3</strong>
                 <p>{{ pair.explanation }}</p>
+                <div v-if="pair.comparisons?.length > 1" v-for="(comparison, index) in pair.comparisons" :key="index" class="wd-score-detail-row"><span>{{ comparison.colours.join(' + ') }}</span><span>{{ comparison.points.toFixed(1) }} / 3</span></div>
               </section>
-              <p>Average pair points ÷ 3 × 25 gives your colour coordination points. Neutral colours, same colours and existing compatible pairs retain their original points.</p>
+              <p>Average garment-pair points ÷ 3 × {{ freeStyling ? 50 : 25 }} gives your colour coordination points. Every selected colour contributes.</p>
+            </details>
+            <details v-if="freeStyling && selection?.scoreDetails.styleDetails?.length" class="wd-item-score-details">
+              <summary>Style pair points</summary>
+              <section v-for="(pair, index) in selection.scoreDetails.styleDetails" :key="index"><strong>{{ pair.names.join(' + ') }} · {{ Math.round(pair.ratio * 100) }}%</strong><p>{{ pair.explanation }}: {{ pair.styles.map(tags => tags.join(', ')).join(' + ') }}</p></section>
+              <p>Related style pairs: Classic with Minimalist, Preppy, Vintage or Romantic; Minimalist with Preppy; Preppy with Vintage; Romantic with Vintage or Y2K; Streetwear with Vintage or Y2K; Vintage with Y2K. Other different styles earn partial points. These are simple styling assumptions, not strict fashion rules.</p>
             </details>
             <p>Personal style preferences affect recommendations only. They do not add match points.</p>
             <p class="wd-score-key">
@@ -737,9 +748,7 @@ watch(() => plannerProductsState.ownerId, owner => {
               or removing a piece recalculates the match.
             </p>
             <small
-              >Occasion and weather estimates use category, colour, material and
-              style. These are simple rules, not a guarantee of
-              suitability.</small
+              >Scores use simple styling rules, not a guarantee of suitability. Category only controls outfit structure and completeness. Missing metadata and legacy generic colour labels can limit assessment.</small
             >
           </details>
         </aside>

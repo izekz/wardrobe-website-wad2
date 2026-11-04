@@ -29,7 +29,7 @@ const filtered = computed(() =>
             ...o.pieces.flatMap((p) => [
               p.name,
               p.category,
-              p.colour,
+              p.colours || p.colour,
               p.style,
               p.occasions,
             ]),

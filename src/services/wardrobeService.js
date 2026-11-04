@@ -25,6 +25,12 @@ export const colours = [
   "Orange",
   "Multicolour",
 ];
+export const wardrobeColours = colours.filter(colour => colour !== 'Multicolour');
+export function clothingColours(item) {
+  const values = item?.source === 'store' ? [item.colour] : Array.isArray(item?.colours) && item.colours.length ? item.colours : [item?.colour];
+  return [...new Set(values.filter(value => colours.includes(value)))];
+}
+export const noOccasion = 'No specific occasion';
 export const styles = [
   "Minimalist",
   "Streetwear",
@@ -35,6 +41,7 @@ export const styles = [
   "Romantic"
 ];
 export const occasions = [
+  noOccasion,
   "University",
   "Presentation",
   "Interview",
