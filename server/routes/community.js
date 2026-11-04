@@ -23,11 +23,12 @@ function createCommunityRouter(models = defaultModels, transact) {
   router.put('/listings/:id', requireCustomer, controller.updateListing);
   router.patch('/listings/:id/status', requireCustomer, controller.setListingStatus);
   router.delete('/listings/:id', requireCustomer, controller.deleteListing);
-  router.get('/credits', requireCustomer, (req, res) => res.status(410).json({ message: 'Customer request credits have been retired; requests are free.' }));
-  router.post('/credits/purchase', requireCustomer, (req, res) => res.status(410).json({ message: 'Customer credit purchases are no longer needed.' }));
+  router.get('/requests/profiles', controller.getRequestProfiles);
   router.get('/requests', controller.getRequests);
   router.post('/requests', requireCustomer, controller.createRequest);
   router.get('/requests/:id', controller.getRequest);
+  router.get('/requests/:id/contacts', controller.getContacts);
+  router.post('/requests/:id/contacts', controller.sendContact);
   router.patch('/requests/:id/status', requireCustomer, controller.setRequestStatus);
   router.delete('/requests/:id', requireCustomer, controller.deleteRequest);
   router.post('/requests/:id/responses/:responseId/accept', requireCustomer, commerce.accept);

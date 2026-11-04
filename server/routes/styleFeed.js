@@ -8,6 +8,7 @@ const CoinTransaction = require('../models/CoinTransaction');
 const { requireBusiness } = require('../middleware/business');
 const { trustedBrowser } = require('../middleware/authentication');
 const { boostIsLive, remainingBoostMs, syncProductBoosts } = require('../services/styleBoostAvailability');
+const { countUpToLimit } = require('../services/styleFeedCounting');
 
 const router = express.Router();
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024; // MongoDB document cap is 16 MB.
@@ -21,6 +22,7 @@ const publicVideo = (item, product, business, userId) => ({
   businessName: business?.businessName || product?.businessName || 'Business',
   productName: product?.name || 'Product', productPrice: product?.price ?? null,
   productAvailable: Boolean(product && product.status === 'active' && product.stock > 0),
+  productListed: Boolean(product && product.status === 'active'),
   productImageURL: product ? `/api/catalog/products/${product._id}/image` : null,
   caption: item.caption, videoURL: `/api/style-feed/${item._id}/video`,
   boosted: sponsored(item), boostedUntil: item.boostedUntil,
@@ -101,24 +103,35 @@ function randomizedFeed(candidates, previousFirst = '', pick = randomInt) {
 router.get('/', async (req, res) => {
   // Retain recent videos for discovery, PLUS ALL currently promoted posts.
   // A prepaid clip must not disappear merely because 120 newer uploads arrived.
-  const [recent, boosted] = await Promise.all([
+  const [recent, boosted, paused] = await Promise.all([
     StyleVideo.find({}).sort({ createdAt: -1 }).limit(120).select('+likesBy'),
     StyleVideo.find({ boostedUntil: { $gt: new Date() }, boostPausedAt: null }).select('+likesBy'),
+    // Pick up older paused campaigns too. This also restores boosts paused by
+    // the previous version when a product sold out (even if it remains sold out).
+    StyleVideo.find({ boostPausedAt: { $ne: null } }).select('+likesBy'),
   ]);
-  const uniqueVideos = new Map([...recent, ...boosted].map(video => [String(video._id), video]));
+  const uniqueVideos = new Map([...recent, ...boosted, ...paused].map(video => [String(video._id), video]));
   const all = [...uniqueVideos.values()];
   const ids = [...new Set(all.map(v => v.productId))].filter(objectId);
-  const products = await Product.find({ _id: { $in: ids }, status: 'active', stock: { $gt: 0 } });
+  // A sold-out product still appears in the feed: viewers can discover the brand
+  // and visit the listing, but checkout correctly blocks buying unavailable stock.
+  const products = await Product.find({ _id: { $in: ids }, status: 'active' });
   const byProduct = new Map(products.map(p => [String(p._id), p]));
-  // A store checkout outside the Outfit Request workflow can also exhaust stock.
-  // Reconcile unavailable boosted products when the feed is requested, without
-  // changing the teammates' general-purpose checkout implementation.
-  // The exact pause begins at first detection; an instantaneous cross-module
-  // pause would require the store checkout to notify this service.
-  const unavailableBoostProducts = new Set(all
-    .filter(video => remainingBoostMs(video) > 0 && !byProduct.has(video.productId))
-    .map(video => video.productId));
-  for (const id of unavailableBoostProducts) await syncProductBoosts(StyleVideo, id, false);
+  // Pause hidden listings, and resume previously paused campaigns when a listing
+  // is active again. Never pause merely because a visible product has sold out.
+  const pauseIds = new Set(all.filter(video => remainingBoostMs(video) > 0 && !video.boostPausedAt && !byProduct.has(video.productId)).map(video => video.productId));
+  const resumeIds = new Set(all.filter(video => video.boostPausedAt && byProduct.has(video.productId)).map(video => video.productId));
+  for (const id of pauseIds) await syncProductBoosts(StyleVideo, id, false);
+  for (const id of resumeIds) {
+    const at = new Date();
+    // Keep the returned in-memory items in step with the database this load.
+    const toResume = all.filter(video => video.productId === id && video.boostPausedAt);
+    await syncProductBoosts(StyleVideo, id, true, { at });
+    for (const video of toResume) {
+      video.boostedUntil = new Date(at.getTime() + remainingBoostMs(video, at));
+      video.boostPausedAt = null;
+    }
+  }
   const candidates = all.filter(v => byProduct.has(v.productId));
   const bizIds = [...new Set(candidates.map(v => v.businessId))].filter(objectId);
   const businesses = await Business.find({ _id: { $in: bizIds } });
@@ -142,7 +155,7 @@ router.get('/mine', requireBusiness, async (req, res) => {
   // Reconcile pre-existing listings and any stock changes made by older code.
   // Pauses start when first detected; we cannot reconstruct past downtime.
   for (const product of products) {
-    await syncProductBoosts(StyleVideo, product._id, product.status === 'active' && product.stock > 0);
+    await syncProductBoosts(StyleVideo, product._id, product.status === 'active');
   }
   const refreshed = await StyleVideo.find({ businessId: String(business._id) }).sort({ createdAt: -1 });
   res.set('Cache-Control', 'no-store');
@@ -195,9 +208,9 @@ router.get('/:id/video', async (req, res) => {
 
 router.delete('/:id', requireBusiness, trustedBrowser, async (req, res) => {
   const { video } = await ownedVideo(req);
-  if (remainingBoostMs(video) > 0) {
-    throw error(409, 'This video still has unused paid promotion time. Keep it until the boost finishes.');
-  }
+  // Deleting a video is always the owner's choice, including during an active
+  // or paused paid campaign. The video and remaining promotion are removed;
+  // past coin transactions remain in the wallet history (no automatic refund).
   await video.deleteOne();
   res.json({ message: 'Video deleted.' });
 });
@@ -220,7 +233,7 @@ router.post('/:id/boost', requireBusiness, trustedBrowser, async (req, res) => {
       ['views', 'likes', 'productClicks', 'storeClicks', 'sponsoredImpressions', 'uniqueReach']
         .map(key => [key, current[key] || 0]));
     const updated = await StyleVideo.findOneAndUpdate({ _id: current._id, businessId: String(business._id), boostedUntil: current.boostedUntil, boostPausedAt: current.boostPausedAt || null },
-      { $set: { boostedUntil, boostStartedAt: now, boostBaseline: baseline, boostSeenBy: [], boostUniqueReach: 0 }, $unset: { boostPausedAt: '' } },
+      { $set: { boostedUntil, boostStartedAt: now, boostBaseline: baseline, boostSeenBy: [], boostUniqueReach: 0, boostImpressionsBy: [] }, $unset: { boostPausedAt: '' } },
       { returnDocument: 'after', session, runValidators: true });
     if (!updated) throw error(409, 'This promotion was changed by another action. Please retry.');
     await CoinTransaction.create([{ businessId: String(business._id), productId: video.productId,
@@ -250,14 +263,20 @@ router.post('/:id/event', trustedBrowser, async (req, res) => {
   const video = await StyleVideo.findById(req.params.id);
   if (!video) throw error(404, 'Video not found.');
   if (type === 'impression') {
-    // Never credit an expired/non-promoted video as paid reach.
     if (!sponsored(video)) return res.json({ counted: false });
+    // A repeat visit is another impression (up to ten per person and boost).
+    // Unique reach remains one viewer per campaign, independent of repeats.
+    const counted = await countUpToLimit(StyleVideo, video._id, req.user.id, 'sponsoredImpressions', 'boostImpressionsBy');
+    if (!counted) return res.json({ counted: false, limitReached: true });
     const first = await StyleVideo.updateOne({ _id: video._id, sponsoredSeenBy: { $ne: req.user.id } },
       { $addToSet: { sponsoredSeenBy: req.user.id }, $inc: { uniqueReach: 1 } });
     const campaignFirst = await StyleVideo.updateOne({ _id: video._id, boostSeenBy: { $ne: req.user.id } },
       { $addToSet: { boostSeenBy: req.user.id }, $inc: { boostUniqueReach: 1 } });
-    await StyleVideo.updateOne({ _id: video._id }, { $inc: { sponsoredImpressions: 1 } });
     return res.json({ counted: true, unique: first.modifiedCount === 1, uniqueThisBoost: campaignFirst.modifiedCount === 1 });
+  }
+  if (type === 'view') {
+    const counted = await countUpToLimit(StyleVideo, video._id, req.user.id, 'views', 'viewedBy');
+    return res.json({ counted, limitReached: !counted });
   }
   await StyleVideo.updateOne({ _id: video._id }, { $inc: { [field]: 1 } });
   res.json({ counted: true });

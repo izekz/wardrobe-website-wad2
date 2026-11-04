@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { singaporeToday } = require('../communityValidation');
 const wardrobeValidation = require('../services/wardrobeValidation');
 const { listedColours } = require('../services/listedColours');
-const { syncProductBoosts } = require('../services/styleBoostAvailability');
+const { stockForSize, takeStock } = require('../services/sizeStock');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function receipt(doc) {
   return {
@@ -13,7 +13,7 @@ function receipt(doc) {
   };
 }
 function createRequestCommerceController(models, transact = work => mongoose.connection.transaction(work)) {
-  const { Request, Response, Product, Item, Purchase, StyleVideo } = models;
+  const { Request, Response, Product, Item, Purchase } = models;
   function ids(req) {
     if (!mongoose.isObjectIdOrHexString(req.params.id) ||
       (req.params.responseId && !mongoose.isObjectIdOrHexString(req.params.responseId))) {
@@ -96,6 +96,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       const { product, response } = await suggestedProduct(req, session);
       const size = wardrobeValidation.text(req.body?.size, 'Size', 20);
       if (!product.sizes.includes(size)) throw fail(400, 'Choose a size offered by this business.');
+      if (stockForSize(product, size) < 1) throw fail(409, `Size ${size} is sold out. Choose another size.`);
       const offeredColours = listedColours(product);
       if (offeredColours.length ? !offeredColours.includes(req.body?.colour) : req.body?.colour !== 'Not specified') {
         throw fail(400, 'The chosen colour is not listed for this product. Review the listing and try again.');
@@ -112,14 +113,13 @@ function createRequestCommerceController(models, transact = work => mongoose.con
         acceptedResponseId: response._id }, { $set: { status: 'closed', purchaseId, fulfilledAt: new Date() } },
       { returnDocument: 'after', runValidators: true, session });
       if (!claimed) throw fail(409, 'The request changed. Refresh and try again.');
-      const stocked = await Product.findOneAndUpdate({ _id: product._id, status: 'active', price: product.price, stock: { $gte: 1 } },
-        { $inc: { stock: -1 } }, { returnDocument: 'after', runValidators: true, session });
+      // Person 4: take one unit from the chosen size only.
+      const take = takeStock(product, size, 1);
+      const stocked = await Product.findOneAndUpdate({ _id: product._id, status: 'active', price: product.price, ...take.filter },
+        take.update, { returnDocument: 'after', runValidators: true, session });
       if (!stocked) throw fail(409, 'The stock or price changed. Refresh and choose an available item.');
-      // The last-unit purchase pauses prepaid Style Feed promotion in the same
-      // MongoDB transaction as the stock decrement, receipt, and wardrobe item.
-      if (StyleVideo && stocked.stock === 0) {
-        await syncProductBoosts(StyleVideo, product._id, false, { session });
-      }
+      // Sold-out products stay in Style Feed for brand awareness. Checkout
+      // prevents further purchases, but does not pause a running video boost.
       const [item] = await Item.create([{ ...clothing, userId: req.communityActor.id, size,
         sourceProductId: String(product._id), purchaseId: String(purchaseId),
         photo: { data: product.photo.data, contentType: product.photo.contentType },

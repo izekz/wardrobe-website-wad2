@@ -22,7 +22,6 @@ body { margin: 0; background: #fffcf8; }
 .community-account { display: flex; align-items: center; gap: 19px; }
 .community-icon-button { border: 0; padding: 7px; background: transparent; color: #453447; border-radius: 50%; display: inline-grid; place-items: center; }
 .community-icon-button:hover { background: #f9eaf0; }
-.community-nav-search-spacer { flex: 0 0 36px; width: 36px; height: 36px; visibility: hidden; pointer-events: none; }
 .community-count-icon { position: relative; text-decoration: none !important; }
 .community-icon-count { position: absolute; right: 0; top: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: #7a365f; color: #fff; font-size: 10px; line-height: 17px; text-align: center; font-weight: 700; box-shadow: 0 0 0 2px #fffdfa; }
 .community-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 43px; height: 43px; border-radius: 50%; background: #f8dce5; color: #653447; font-size: 20px; }
@@ -322,3 +321,11 @@ body { margin: 0; background: #fffcf8; }
 
 /* A single listed colour is a fact about the item, not an editable variant. */
 .request-listed-colour{background:#f8f3f7;border:1px solid #e5d8e2;border-radius:9px;padding:11px 13px;margin:4px 0 7px;font-weight:650;color:#503347}
+
+/* Community Requests: businesses browse one card per customer profile. */
+.community-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.community-profile-summary { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.community-profile-summary .community-avatar-small { width: 50px; height: 50px; font-size: 20px; }
+.community-profile-summary h2 { overflow-wrap: anywhere; }
+.community-profile-summary .community-btn { margin-top: auto; }
+@media (max-width: 700px) { .community-profile-grid { grid-template-columns: 1fr; } }

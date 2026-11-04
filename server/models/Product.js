@@ -17,7 +17,17 @@ const schema = new mongoose.Schema({
   material: { type: String, trim: true, maxlength: 50 },
   occasions: [{ type: String, trim: true, maxlength: 40 }],
   sizes: [{ type: String, trim: true, maxlength: 20 }],
+  // Total of every size below. Kept so "stock > 0" checks elsewhere still work.
   stock: { type: Number, required: true, min: 0, max: 100000 },
+  // Stock for each size, e.g. [{ size: 'M', stock: 3 }]. Missing on older listings,
+  // which share `stock` across all sizes. See services/sizeStock.js.
+  sizeStock: {
+    type: [new mongoose.Schema({
+      size: { type: String, required: true, trim: true, maxlength: 20 },
+      stock: { type: Number, required: true, min: 0, max: 100000 }
+    }, { _id: false })],
+    default: undefined
+  },
   description: { type: String, required: true, trim: true, maxlength: 1000 },
   status: { type: String, enum: ['active', 'hidden'], default: 'active' },
   // Paid placements. The *Until dates let promotions expire after 7 days.

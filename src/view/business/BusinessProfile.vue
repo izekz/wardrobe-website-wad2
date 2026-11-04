@@ -50,16 +50,6 @@ export default {
 <template>
   <section aria-labelledby="biz-profile-heading">
     <div class="biz-page-head"><div><h1 id="biz-profile-heading">{{ isNew ? 'Set up your business' : 'Your business profile' }}</h1><p>{{ isNew ? 'Tell students who you are. New businesses get 100 free coins.' : 'Keep your store details and styles up to date.' }}</p></div></div>
-    <p v-if="businessId">
-      <RouterLink
-        :to="{
-          name: 'discover-business',
-          params: { businessId }
-        }"
-      >
-        View your business profile and listings →
-      </RouterLink>
-    </p>
     <p v-if="loading" role="status" class="biz-loading">Loading your profile…</p>
     <form v-else ref="form" @submit.prevent="save" :aria-busy="saving">
       <fieldset :disabled="saving" class="border-0 p-0 m-0">

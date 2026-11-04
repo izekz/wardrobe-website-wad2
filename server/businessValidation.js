@@ -26,6 +26,26 @@ function wholeNumber(value, label, max) {
   return value;
 }
 
+// Person 4: stock per size. Accepts { S: 2, M: 5 } or [{ size: 'S', stock: 2 }].
+// Returns the sizes, the per-size rows and the total stock.
+function sizeStockInput(value) {
+  const rows = Array.isArray(value)
+    ? value.map(entry => [entry?.size, entry?.stock])
+    : value && typeof value === 'object' ? Object.entries(value) : null;
+  if (!rows || !rows.length || rows.length > 12) throw badRequest('Add between 1 and 12 sizes, each with its stock.');
+  const seen = new Set();
+  const sizeStock = rows.map(([size, stock]) => {
+    const name = typeof size === 'string' ? size.trim() : '';
+    if (!name || name.length > 20) throw badRequest('Each size needs a name of up to 20 characters.');
+    if (seen.has(name.toLowerCase())) throw badRequest(`The size "${name}" is listed twice.`);
+    seen.add(name.toLowerCase());
+    return { size: name, stock: wholeNumber(stock, `Stock for size ${name}`, 100000) };
+  });
+  const stock = sizeStock.reduce((sum, entry) => sum + entry.stock, 0);
+  if (stock > 100000) throw badRequest('Total stock must be 100000 or less.');
+  return { sizes: sizeStock.map(entry => entry.size), sizeStock, stock };
+}
+
 function profileInput(body) {
   objectBody(body, 'business profile');
   const styles = textList(body.styles, 'fashion style', STYLES.length, 20);
@@ -48,6 +68,11 @@ function productInput(body, { photoRequired }) {
   if (!Array.isArray(offered) || !offered.length || offered.length > COLOURS.length || offered.some(colour => !COLOURS.includes(colour)))
     throw badRequest('Choose at least one valid product colour.');
   const colours = [...new Set(offered)];
+  // New forms send stock per size. Older callers that send `sizes` + one `stock`
+  // number still work: the product then has one shared stock for all sizes.
+  const sizing = body.sizeStock !== undefined
+    ? sizeStockInput(body.sizeStock)
+    : { sizes: textList(body.sizes, 'size', 12, 20), sizeStock: undefined, stock: wholeNumber(body.stock, 'Stock', 100000) };
   return {
     name: text(body.name, 'Product name', 80),
     price: money(body.price, 'Price'),
@@ -57,8 +82,9 @@ function productInput(body, { photoRequired }) {
     colour: colours.length === 1 ? colours[0] : undefined,
     material: text(body.material, 'Material', 50),
     occasions: textList(body.occasions, 'occasion', 8, 40),
-    sizes: textList(body.sizes, 'size', 12, 20),
-    stock: wholeNumber(body.stock, 'Stock', 100000),
+    sizes: sizing.sizes,
+    sizeStock: sizing.sizeStock,
+    stock: sizing.stock,
     description: text(body.description, 'Description', 1000),
     status: body.status === undefined ? 'active' : choice(body.status, ['active', 'hidden'], 'status'),
     photo: body.photo ? photo(body.photo) : undefined,
@@ -72,4 +98,4 @@ function responseInput(body) {
   return { productId: body.productId, message: text(body.message, 'Message', 1000) };
 }
 
-module.exports = { COIN_COSTS, COIN_PACKAGES, FREE_LISTINGS, PROMOTION_DAYS, profileInput, productInput, responseInput };
+module.exports = { COIN_COSTS, COIN_PACKAGES, FREE_LISTINGS, PROMOTION_DAYS, profileInput, productInput, sizeStockInput, responseInput };

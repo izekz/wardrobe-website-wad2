@@ -10,7 +10,6 @@ import {
   today,
   occasions,
   styles,
-  weatherEmoji,
   categories,
   categoryName,
   matchesSearch,
@@ -52,6 +51,21 @@ const candidates = computed(() =>
 );
 // Selection stays in the existing state; the picker and board are two views of it.
 const search = ref(""), category = ref(""), failedPhotos = ref({});
+const plannerRoot = ref(null);
+async function placePiece(piece, event) {
+  togglePiece(piece);
+  await nextTick();
+  const slot = [...(plannerRoot.value?.querySelectorAll(".wd-board-slot[data-piece-key]") || [])]
+    .find(node => node.dataset.pieceKey === pieceKey(piece));
+  slot?.querySelector(".wd-board-remove")?.focus({ preventScroll: event?.detail !== 0 });
+}
+async function returnPiece(piece, event) {
+  togglePiece(piece);
+  await nextTick();
+  const card = [...(plannerRoot.value?.querySelectorAll(".wd-picker-grid [data-piece-key]") || [])]
+    .find(node => node.dataset.pieceKey === pieceKey(piece));
+  (card?.querySelector(".wd-use-piece") || plannerRoot.value?.querySelector(".wd-studio-search input"))?.focus({ preventScroll: event?.detail !== 0 });
+}
 const pickerCategories = [{ value: "", label: "All" }, ...categories.map(value => ({ value, label: categoryName(value) }))];
 const availablePieces = computed(() => candidates.value.filter(piece =>
   !isSelected(piece) && (!category.value || piece.category === category.value) &&
@@ -129,6 +143,46 @@ const canSave = computed(
     !saving.value &&
     !!name.value.trim(),
 );
+// Weather is decorative only; scoring and recommendations still use the existing API.
+const weatherPaused = ref(false);
+const displayedWeather = computed(() => !busy.value && weather.value?.available ? weather.value : null);
+const weatherScene = computed(() => {
+  const forecast = displayedWeather.value;
+  if (!forecast) return "neutral";
+  const code = forecast.weatherCode;
+  if (Number.isInteger(code)) {
+    if ([95, 96, 99].includes(code)) return "storm";
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "rain";
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
+    if ([45, 48].includes(code)) return "fog";
+    if (code === 3) return "cloudy";
+    if ([1, 2].includes(code)) return "partly";
+    if (code === 0) return "sunny";
+    return "neutral";
+  }
+  // Support older API responses during deployment without guessing unknown conditions.
+  const condition = (forecast.condition || "").toLowerCase();
+  if (condition.includes("thunder") || condition.includes("storm")) return "storm";
+  if (/rain|shower|drizzle/.test(condition)) return "rain";
+  if (condition.includes("snow")) return "snow";
+  if (/fog|mist/.test(condition)) return "fog";
+  if (condition.includes("partly")) return "partly";
+  if (/cloud|overcast/.test(condition)) return "cloudy";
+  if (/clear|sunny/.test(condition)) return "sunny";
+  return "neutral";
+});
+const weatherSummary = computed(() => {
+  const forecast = displayedWeather.value;
+  if (!forecast) return busy.value ? "Checking the selected date’s forecast…" : "Forecast unavailable";
+  return [
+    forecast.location || "Singapore",
+    Number.isFinite(forecast.temperature) ? `${Math.round(forecast.temperature)}°C high` : null,
+    forecast.condition,
+    Number.isFinite(forecast.rainChance) ? `${forecast.rainChance}% chance of rain` : null,
+  ].filter(Boolean).join(" · ");
+});
+const weatherAdvice = computed(() => displayedWeather.value?.advice || []);
+
 let generation = 0,
   scoreRequest = 0,
   plannerLoad = 0,
@@ -171,6 +225,7 @@ async function assess() {
 }
 async function generate() {
   const version = ++generation;
+  weather.value = null;
   scoreRequest++;
   selection.value = null;
   scoring.value = false;
@@ -367,60 +422,79 @@ watch(
 );
 </script>
 <template>
-  <section class="wd-page wd-studio">
+  <section ref="plannerRoot" class="wd-page wd-studio wd-weather-studio">
+    <div class="wd-weather-scene" :class="[`wd-sky-${weatherScene}`, { 'is-paused': weatherPaused }]" aria-hidden="true" inert>
+      <Transition name="wd-weather-fade">
+        <div v-if="weatherScene !== 'neutral'" :key="weatherScene" class="wd-weather-atmosphere" :class="`wd-atmosphere-${weatherScene}`">
+          <div class="wd-weather-stage">
+            <div class="wd-sky-haze"></div>
+            <template v-if="['sunny', 'partly'].includes(weatherScene)">
+              <div class="wd-sky-sun"></div>
+              <div class="wd-sky-beams">
+                <span v-for="beam in 6" :key="beam" :style="{ '--beam': beam }"></span>
+              </div>
+              <div class="wd-sky-glints">
+                <span v-for="glint in 16" :key="glint" :style="{ left: `${(glint * 37) % 100}%`, top: `${(glint * 19) % 100}%`, '--glint': glint }"></span>
+              </div>
+            </template>
+            <div v-if="['partly', 'cloudy', 'rain', 'storm', 'fog', 'snow'].includes(weatherScene)" class="wd-sky-clouds">
+              <span v-for="cloud in 8" :key="cloud" class="wd-sky-cloud" :style="{ '--cloud': cloud, '--cloud-top': `${[0, 15, 4, 43, 68, 82, 35, 60][cloud - 1]}%` }"></span>
+            </div>
+            <div v-if="['rain', 'storm', 'snow'].includes(weatherScene)" class="wd-sky-precipitation">
+              <span v-for="drop in (weatherScene === 'snow' ? 50 : 120)" :key="drop" class="wd-sky-drop" :class="`wd-drop-depth-${drop % 3}`" :style="{
+                left: `${(drop * 37.31) % 120 - 10}%`, '--drop-start': `${(drop * 23) % 100}%`,
+                '--fall-duration': `${1.1 + (drop % 7) * 0.18}s`, '--fall-delay': `${-drop * 0.39}s`,
+              }"></span>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
     <header class="wd-planner-heading">
-      <p class="wd-eyebrow">YOUR PERSONAL STYLING STUDIO</p>
-      <h1>{{ isEditing ? "Edit your outfit" : "Build a look that feels like you" }}</h1>
-      <p>{{ isEditing ? "Make your changes, then update your saved outfit." : "Choose your pieces. See your outfit come together." }}</p>
-      <RouterLink v-if="isEditing" class="community-text-button" :to="{ name: 'saved-outfits' }">Cancel editing</RouterLink>
+      <div>
+        <h1>{{ isEditing ? "Edit your outfit" : "Outfit planner" }}</h1>
+        <p>{{ isEditing ? "Make your changes, then update your saved outfit." : "Choose pieces for your next occasion." }}</p>
+      </div>
+      <div class="wd-studio-heading-actions">
+        <RouterLink :to="{ name: 'saved-outfits' }">{{ isEditing ? 'Cancel editing' : 'Saved outfits' }}<CommunityIcon name="arrow" :size="16" /></RouterLink>
+        <div class="wd-weather-controls">
+          <button v-if="weatherScene !== 'neutral'" type="button" class="wd-weather-pause" :aria-pressed="weatherPaused" @click="weatherPaused = !weatherPaused">
+            {{ weatherPaused ? 'Resume weather animation' : 'Pause weather animation' }}
+          </button>
+        </div>
+      </div>
     </header>
 
     <div class="wd-studio-toolbar">
       <label class="wd-studio-field">
-        <CommunityIcon name="calendar" :size="21" />
         <span id="wd-occasion-label">Occasion</span>
         <select aria-labelledby="wd-occasion-label" v-model="occasion" :disabled="saving">
           <option v-for="o in occasions" :key="o">{{ o }}</option>
         </select>
       </label>
       <label class="wd-studio-field">
-        <CommunityIcon name="calendar" :size="21" />
         <span id="wd-date-label">Date</span>
         <input aria-labelledby="wd-date-label" v-model="date" :min="today()" type="date" :disabled="saving" />
       </label>
       <label class="wd-studio-field">
-        <CommunityIcon name="hanger" :size="23" />
         <span id="wd-style-label">Style</span>
         <select aria-labelledby="wd-style-label" v-model="style" :disabled="saving">
           <option value="">My preferences</option>
           <option v-for="s in styles" :key="s">{{ s }}</option>
         </select>
       </label>
-      <section class="wd-studio-forecast" aria-label="Singapore weather forecast">
-        <div class="wd-studio-weather" aria-live="polite">
-          <span class="wd-studio-weather-icon" aria-hidden="true">{{ weatherEmoji(weather) }}</span>
-          <div>
-            <strong>Singapore</strong>
-            <small>{{ busy ? "Checking the forecast…" : weather?.available
-              ? `${Math.round(weather.temperature)}°C · ${weather.condition}`
-              : "Forecast unavailable" }}</small>
-          </div>
-          <span v-if="weather?.available" class="wd-studio-rain">{{ weather.rainChance == null
-            ? "Rain chance unavailable" : `${weather.rainChance}% chance of rain` }}</span>
-        </div>
-        <details v-if="weather?.available && weather.advice?.length" class="wd-studio-weather-tips">
-          <summary>Weather tips</summary>
-          <p v-for="advice in weather.advice" :key="advice">{{ advice }}</p>
-        </details>
-      </section>
     </div>
 
+    <nav class="wd-mobile-steps" aria-label="Planner sections">
+      <a href="#wd-picker-title">Choose pieces</a>
+      <a href="#wd-board-title">Outfit board</a>
+      <a href="#wd-selection-title">Review &amp; save</a>
+    </nav>
     <p v-if="error" role="alert" class="community-error">
       {{ error }}
       <button class="wd-link" :disabled="saving" @click="retryPlanner">Try again</button>
     </p>
     <p v-for="message in editNotices" :key="message" class="wd-weather-note" role="status">{{ message }}</p>
-    <p v-if="weather && !weather.available" class="wd-weather-note">{{ weather.message }}</p>
     <p v-if="loading || busy" role="status" class="wd-studio-loading">Finding recommendations for your wardrobe…</p>
     <template v-else-if="!isEditing || loadedOutfitId === editOutfitId">
       <p v-if="product" class="wd-product-note">
@@ -437,9 +511,11 @@ watch(
       <div v-else class="wd-planner-layout">
         <section class="wd-studio-picker" aria-labelledby="wd-picker-title">
           <header class="wd-picker-heading">
-            <p class="wd-eyebrow">FROM YOUR WARDROBE</p>
-            <h2 id="wd-picker-title">Choose your pieces</h2>
-            <p>One piece per category. A dress replaces a top and bottom. Choosing another piece in a category replaces your earlier choice.</p>
+            <h2 id="wd-picker-title" tabindex="-1">Choose your pieces</h2>
+            <details class="wd-picker-help">
+              <summary>How selection works</summary>
+              <p>One piece per category. A dress replaces a top and bottom. Choosing another piece in a category replaces your earlier choice.</p>
+            </details>
           </header>
           <label class="wd-studio-search">
             <CommunityIcon name="search" :size="19" />
@@ -452,67 +528,70 @@ watch(
               @click="category = option.value">{{ option.label }}</button>
           </div>
           <p class="wd-studio-available" role="status">{{ availablePieces.length }} {{ availablePieces.length === 1 ? 'piece' : 'pieces' }} available</p>
-          <div v-if="availablePieces.length" class="wd-picker-grid">
-            <ClothingCard v-for="(piece, index) in availablePieces" :key="pieceKey(piece)" :item="piece" :index="index">
-              <template #overlay>
-                <span v-if="piece.recommendation?.label" class="wd-recommended-tag wd-card-recommended"
-                  :class="{ 'wd-style-match-tag': piece.recommendation?.kind === 'style' }">{{ piece.recommendation.label }}</span>
-              </template>
+          <TransitionGroup v-if="availablePieces.length" name="wd-piece" tag="div" class="wd-picker-grid">
+            <ClothingCard v-for="(piece, index) in availablePieces" :key="pieceKey(piece)" :data-piece-key="pieceKey(piece)" :item="piece" :index="index">
               <p class="wd-item-style">{{ piece.style?.join(" · ") || "Style not tagged" }}</p>
-              <p class="wd-source-caption">{{ piece.source === 'store' ? `Store pick · S$${Number(piece.price).toFixed(2)}` : 'In your wardrobe' }}</p>
-              <button type="button" class="wd-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving" @click="togglePiece(piece)">
-                <span aria-hidden="true">＋</span>Use this piece
+              <p v-if="piece.recommendation?.label" class="wd-piece-recommendation" :class="{ 'is-style': piece.recommendation?.kind === 'style' }">
+                <CommunityIcon name="check" :size="13" />{{ piece.recommendation.label }}
+              </p>
+              <p v-if="piece.source === 'store'" class="wd-source-caption">Store pick · S${{ Number(piece.price).toFixed(2) }}</p>
+              <button type="button" class="wd-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving" @click="placePiece(piece, $event)">
+                <CommunityIcon name="plus" :size="16" />Use this piece
               </button>
             </ClothingCard>
-          </div>
+          </TransitionGroup>
           <div v-else class="wd-studio-picker-empty">
             <CommunityIcon name="hanger" :size="32" />
             <h3>{{ search || category ? 'No matching pieces' : 'Your pieces are on the board' }}</h3>
             <p>{{ search || category ? 'Try a different search or category.' : 'Remove a piece from your outfit board to choose it again.' }}</p>
             <button v-if="search || category" type="button" class="wd-link" @click="search = ''; category = ''">Clear filters</button>
           </div>
+          <a v-if="chosenCount" class="wd-mobile-board-link" href="#wd-board-title">View outfit board · {{ chosenCount }} selected<CommunityIcon name="arrow" :size="16" /></a>
         </section>
 
         <section class="wd-studio-board" aria-labelledby="wd-board-title">
           <header class="wd-studio-board-heading">
-            <div><p class="wd-eyebrow">MAKE IT YOURS</p><h2 id="wd-board-title">Your outfit board</h2></div>
+            <h2 id="wd-board-title" tabindex="-1">Your outfit board</h2>
             <span class="wd-studio-count" aria-live="polite">{{ chosenCount }} {{ chosenCount === 1 ? 'piece' : 'pieces' }}</span>
           </header>
-          <p class="wd-studio-board-caption">Your selected photos, together.</p>
+          <p class="wd-studio-board-caption">Top to toe. Layers and accessories alongside.</p>
           <div class="wd-studio-board-columns">
             <div v-for="group in boardGroups" :key="group.key" :class="`wd-studio-board-${group.key}`">
               <article v-for="slot in group.slots" :key="slot.category" class="wd-board-slot"
-                :class="{ 'is-empty': !slot.piece, 'is-dress': slot.category === 'Dresses' }"
+                :class="{ 'is-empty': !slot.piece, 'is-dress': slot.category === 'Dresses', 'is-shoes': slot.category === 'Shoes' }"
+                :data-piece-key="slot.piece ? pieceKey(slot.piece) : undefined"
                 :aria-label="`${slot.label}${slot.piece ? ': ' + slot.piece.name : ': not selected'}`">
                 <header class="wd-board-slot-heading">
-                  <span class="wd-board-slot-label">{{ slot.label }}<small v-if="slot.optional"> · Optional</small></span>
+                  <span class="wd-board-slot-label">{{ slot.label }}<small v-if="slot.optional">Optional</small></span>
                   <h3 v-if="slot.piece">{{ slot.piece.name }}</h3>
                 </header>
-                <template v-if="slot.piece">
-                  <div class="wd-board-photo">
-                    <img v-if="slot.piece.imageURL && !failedPhotos[photoKey(slot.piece)]" :src="slot.piece.imageURL"
-                      :alt="slot.piece.name" @error="failedPhotos[photoKey(slot.piece)] = true" />
-                    <span v-else class="wd-board-photo-fallback"><CommunityIcon name="hanger" :size="28" />Photo unavailable</span>
-                    <button type="button" class="wd-board-remove" :aria-label="`Remove ${slot.piece.name} from outfit`"
-                      :disabled="saving" @click="togglePiece(slot.piece)"><span aria-hidden="true">×</span></button>
+                <Transition name="wd-board-piece">
+                  <div v-if="slot.piece" :key="pieceKey(slot.piece)" class="wd-board-selected">
+                    <div class="wd-board-photo">
+                      <img v-if="slot.piece.imageURL && !failedPhotos[photoKey(slot.piece)]" :src="slot.piece.imageURL"
+                        :alt="slot.piece.name" @error="failedPhotos[photoKey(slot.piece)] = true" />
+                      <span v-else class="wd-board-photo-fallback"><CommunityIcon name="hanger" :size="28" />Photo unavailable</span>
+                      <button type="button" class="wd-board-remove" :aria-label="`Remove ${slot.piece.name} from outfit`"
+                        :disabled="saving" @click="returnPiece(slot.piece, $event)"><CommunityIcon name="close" :size="18" /></button>
+                    </div>
+                    <span v-if="slot.category === 'Dresses'" class="wd-board-dress-note">Covers top + bottom</span>
+                    <p v-if="slot.piece.source === 'store'" class="wd-board-store-note">Store pick · S${{ Number(slot.piece.price).toFixed(2) }}</p>
                   </div>
-                  <span v-if="slot.category === 'Dresses'" class="wd-board-dress-note">Covers top + bottom</span>
-                  <p v-if="slot.piece.source === 'store'" class="wd-board-store-note">Store pick · S${{ Number(slot.piece.price).toFixed(2) }}</p>
-                </template>
-                <div v-else class="wd-board-placeholder">
-                  <CommunityIcon :name="slot.category === 'Accessories' ? 'tag' : 'hanger'" :size="26" />
-                  <span>{{ slot.optional ? 'Add if you like' : `Choose ${slot.label === 'Shoes' ? 'shoes' : 'a ' + slot.label.toLowerCase()}` }}</span>
-                </div>
+                  <div v-else key="empty" class="wd-board-placeholder">
+                    <CommunityIcon :name="slot.category === 'Accessories' ? 'tag' : 'hanger'" :size="26" />
+                    <span>{{ slot.optional ? 'Add if you like' : `Choose ${slot.label === 'Shoes' ? 'shoes' : 'a ' + slot.label.toLowerCase()}` }}</span>
+                  </div>
+                </Transition>
               </article>
             </div>
           </div>
           <button type="button" class="wd-studio-reset" :disabled="!chosenCount || saving" @click="resetOutfit">
-            <span aria-hidden="true">↺</span> Reset outfit
+            <CommunityIcon name="close" :size="15" /> Reset outfit
           </button>
         </section>
 
         <aside class="wd-plan-summary">
-          <p class="wd-eyebrow">YOUR SELECTION</p>
+          <p id="wd-selection-title" tabindex="-1" class="wd-selection-label">Your selection</p>
           <div class="wd-summary-title">
             <h2>
               {{ occasion }} {{ selection?.complete ? "ready" : "outfit" }}
@@ -566,9 +645,7 @@ watch(
               Use a piece from your wardrobe to start building your outfit.
             </p>
             <p v-else>
-              {{ chosenCount }}
-              {{ chosenCount === 1 ? "piece" : "pieces" }} chosen by you. Score
-              and progress reflect these pieces only.
+              Based on your {{ chosenCount }} selected {{ chosenCount === 1 ? "piece" : "pieces" }}.
               <span v-if="selection?.scoreDetails.provisional">This is a provisional score for one piece.</span>
             </p>
           </div>
@@ -578,6 +655,19 @@ watch(
               {{ comment.text }}
             </li>
           </ul>
+          <section class="wd-selection-weather" aria-labelledby="wd-weather-advice-title" aria-live="polite" aria-atomic="true">
+            <h3 id="wd-weather-advice-title">Weather advice</h3>
+            <p class="wd-selection-forecast">
+              {{ weatherSummary }}
+            </p>
+            <template v-if="displayedWeather">
+              <p v-if="displayedWeather.date" class="wd-selection-forecast-date">Forecast for {{ displayedWeather.date }} · Daily forecast, not live conditions.</p>
+              <ul v-if="weatherAdvice.length">
+                <li v-for="advice in weatherAdvice" :key="advice">{{ advice }}</li>
+              </ul>
+            </template>
+            <p v-else-if="!busy">{{ weather?.message || 'You can still plan your outfit. Weather advice will appear when a forecast is available.' }}</p>
+          </section>
           <div class="wd-basics-progress" aria-live="polite">
             <div class="wd-progress-label">
               <strong>Required basic pieces</strong
@@ -643,15 +733,12 @@ watch(
                   ? "Choose pieces to save"
                   : !selection?.complete
                     ? "Complete your outfit to save"
-                    : "♡ Save outfit"
+                    : "Save outfit"
             }}
           </button>
           <p v-if="notice" role="status" class="wd-success">{{ notice }}</p>
-          <section
-            class="wd-score-guide"
-            aria-label="Matching score explanation"
-          >
-            <h3>How your match score works</h3>
+          <details class="wd-score-guide" aria-label="Matching score explanation">
+            <summary>How your match score works</summary>
             <p class="wd-score-formula">
               Occasion 60 + Colour coordination 25 + Weather 15
             </p>
@@ -702,7 +789,7 @@ watch(
               style. These are simple rules, not a guarantee of
               suitability.</small
             >
-          </section>
+          </details>
         </aside>
       </div>
     </template>

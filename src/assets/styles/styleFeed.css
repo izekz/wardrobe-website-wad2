@@ -115,3 +115,10 @@
   .sf-video-actions{gap:4px}
 }
 @media (prefers-reduced-motion:reduce){.sf-viewer{scroll-behavior:auto}}
+
+/* Small view count next to TikTok-style like action (not a separate button). */
+.sf-view-count{display:flex;flex-direction:column;align-items:center;gap:2px;color:#fff;text-shadow:0 1px 4px #0009;pointer-events:none;font-weight:700}
+.sf-view-count span{font-size:23px;line-height:1}
+.sf-view-count small{font-size:12px}
+
+.sf-sold-out{font-size:.69rem;font-weight:700;color:#a44868}

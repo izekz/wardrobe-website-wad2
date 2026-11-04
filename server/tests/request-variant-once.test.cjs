@@ -1,0 +1,38 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const root = path.resolve(__dirname, '../..')
+const source = file => fs.readFileSync(path.join(root, file), 'utf8')
+const detail = source('src/view/discover/ProductDetail.vue')
+const suggestion = source('src/components/RequestSuggestionAction.vue')
+const request = source('src/view/community/RequestDetail.vue')
+const checkout = source('src/view/community/RequestCheckout.vue')
+
+test('suggestion product details show listed colours but cannot select a colour', () => {
+  assert.match(detail, /v-if="isSuggestion"[^\n]*Available colours:/)
+  assert.match(detail, /v-else-if="availableColours\.length"[^\n]*<select id="detail-colour"/)
+  assert.match(detail, /v-if="!isSuggestion&&product\.sizes\?\.length"/)
+  assert.match(detail, /v-if="isShopper&&!isSuggestion"/)
+  assert.match(detail, /<RequestSuggestionAction :product="product"\/>/)
+  assert.match(detail, /v-if="wardrobeRoute&&!isSuggestion"/)
+  assert.doesNotMatch(detail, /:selected-colour="colour"/)
+})
+
+test('accepting a suggestion carries no variant from a product details page', () => {
+  assert.doesNotMatch(suggestion, /selectedColour|selected-colour/)
+  assert.match(suggestion, /checkoutRoute\(\).*?name: 'community-request-checkout'/)
+  assert.match(suggestion, /query: \{ accepted: '1' \}/)
+  assert.doesNotMatch(request, /query\.colour/)
+  assert.match(request, /checkoutRoute\(responseId\).*?community-request-checkout/)
+})
+
+test('request checkout chooses its own colour and size; regular store cart remains', () => {
+  assert.doesNotMatch(checkout, /query\.colour|query\.size/)
+  assert.match(checkout, /id="checkout-size"/)
+  assert.match(checkout, /id="checkout-colour"/)
+  assert.match(checkout, /v-model="form\.colour"/)
+  assert.match(checkout, /availableColours\.length === 1/)
+  assert.match(checkout, /this\.availableColours\.length === 1/)
+  assert.match(detail, /addToCart\(this\.product,\{size:this\.size,colour:this\.colour,quantity:this\.quantity\}\)/)
+})
