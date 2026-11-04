@@ -925,3 +925,35 @@ test("wardrobe taxonomy, Romantic scoring and legacy compatibility use current d
   assert.throws(() => itemInput(legacy, false));
   assert.doesNotThrow(() => itemInput(legacy, false, { allowLegacyStyles: true }));
 });
+
+test("entered plastic and unfamiliar materials are not reported as missing", () => {
+  const { assessSelection, occasionRating, weatherRating } = require("../services/outfitMatching");
+  const shoe = { name: "ASICS shoe", category: "Shoes", colour: "Black", style: ["Minimalist"], material: "plastic" };
+  for (const material of ["plastic", " Plastic ", "PLASTIC"]) {
+    const piece = { ...shoe, material };
+    for (const [occasion, points] of [["Presentation", 2], ["Casual outings", 4]]) {
+      const selection = assessSelection([piece], occasion, [], weather);
+      const component = selection.scoreDetails.itemDetails[0].components.find(c => c.label === "Material");
+      assert.equal(component.provided, true);
+      assert.equal(component.available, true);
+      assert.equal(component.earned, points);
+      assert.equal(selection.comments.some(c => /adding.*material/i.test(c.text)), false);
+      assert.ok(selection.matchScore > 0);
+    }
+    assert.equal(weatherRating(piece, weather), null); // Generic plastic does not prove weather protection.
+  }
+  const unfamiliar = { ...shoe, material: "Carbon-fibre composite" };
+  const selection = assessSelection([unfamiliar], "Presentation", [], weather);
+  const component = selection.scoreDetails.itemDetails[0].components.find(c => c.label === "Material");
+  assert.equal(component.provided, true);
+  assert.equal(component.available, false);
+  assert.equal(component.earned, 0); // Do not invent suitability points for unfamiliar materials.
+  assert.equal(selection.comments.some(c => /adding.*material/i.test(c.text)), false);
+  assert.ok(selection.comments.some(c => c.text === "The material for ASICS shoe is saved, but its suitability is not assessed yet."));
+  for (const material of [undefined, null, "", "  ", "Unknown", "Not specified"]) {
+    const missing = assessSelection([{ ...shoe, material }], "Presentation", [], weather);
+    assert.ok(missing.comments.some(c => c.text === "Try adding material details for ASICS shoe."));
+  }
+  assert.equal(occasionRating({ ...shoe, material: "Rubber" }, "Presentation").components.find(c => c.label === "Material").earned, 2);
+  assert.equal(weatherRating({ ...shoe, material: "Waterproof plastic" }, weather).ratio, 1);
+});

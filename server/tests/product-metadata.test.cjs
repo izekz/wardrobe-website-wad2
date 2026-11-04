@@ -83,6 +83,23 @@ test('business product create/edit persists metadata, keeps photos and passes tr
   assert.equal(variant.body.selection.scoreDetails.itemDetails[0].earned, 42);
   for (const productColour of ['Red', ['Black', 'Navy']])
     assert.equal((await api('/wardrobe/selection', 'POST', { occasion: 'Presentation', itemIds: [], productId: id, productColour }, 'customer')).status, 400);
+  // A business shoe and a private wardrobe shoe use their saved plastic material.
+  const plasticProduct = await api('/business/products', 'POST', { ...details, name: 'ASICS shoe', category: 'Shoes', colours: ['Black'], material: 'plastic' });
+  assert.equal(plasticProduct.status, 201);
+  const storeSelection = await api('/wardrobe/selection', 'POST', { occasion: 'Presentation', itemIds: [], productId: plasticProduct.body.product.productId, productColour: 'Black' }, 'customer');
+  assert.equal(storeSelection.status, 200);
+  const wardrobeShoe = await api('/wardrobe/items', 'POST', { name: 'ASICS shoe', category: 'Shoes', colour: 'Black', material: 'plastic', style: ['Minimalist'], photo: png }, 'customer');
+  assert.equal(wardrobeShoe.status, 201);
+  const ownedSelection = await api('/wardrobe/selection', 'POST', { occasion: 'Presentation', itemIds: [wardrobeShoe.body.item.itemId] }, 'customer');
+  assert.equal(ownedSelection.status, 200);
+  for (const result of [storeSelection, ownedSelection]) {
+    assert.equal(result.body.selection.pieces[0].material, 'plastic');
+    const material = result.body.selection.scoreDetails.itemDetails[0].components.find(c => c.label === 'Material');
+    assert.equal(material.available, true);
+    assert.equal(material.provided, true);
+    assert.equal(material.earned, 2);
+    assert.equal(result.body.selection.comments.some(c => /adding.*material/i.test(c.text)), false);
+  }
   const legacy = await models.Product.create({ ...productInput(details, { photoRequired: true }), businessId: String(models.Business.rows[0]._id), businessName: 'shop' });
   legacy.colours = undefined; legacy.colour = 'White'; legacy.material = undefined; await legacy.save();
   const old = await api(`/catalog/products/${legacy._id}`, 'GET', null, 'customer');

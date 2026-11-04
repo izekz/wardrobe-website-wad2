@@ -25,6 +25,10 @@ const legacyStylePoints = {
   "Casual outings": [30, 12, 21, 12], "Formal events": [3, 30, 21, 0],
 };
 const colourNames = new Set([...neutrals, "blue", "pink", "purple", "green", "red", "yellow", "orange", "multicolour"]);
+function materialProvided(material) {
+  const text = lower(material);
+  return !!text && !["unknown", "unknown fabric", "unknown material", "not specified", "unspecified", "n/a", "none", "-"].includes(text);
+}
 function materialKind(material) {
   const text = lower(material);
   if (/waterproof|water-resistant|rubber|nylon/.test(text)) return "rain";
@@ -32,6 +36,7 @@ function materialKind(material) {
   if (/denim|jersey/.test(text)) return "relaxed";
   if (/cotton|linen/.test(text)) return "light";
   if (/wool|silk|leather|polyester|viscose|rayon|structured|tailored/.test(text)) return "polished";
+  if (/\bplastics?\b/.test(text)) return "synthetic";
   return null;
 }
 function occasionRating(item, occasion) {
@@ -54,7 +59,7 @@ function occasionRating(item, occasion) {
     { label: "Style", weight: 30, available: stylePoints.length > 0, earned: stylePoints.length ? Math.max(...stylePoints) : 0 },
     { label: "Category", weight: 15, available: category in categoryPoints, earned: categoryPoints[category] || 0 },
     { label: "Colour", weight: 10, available: knownColour, earned: !knownColour ? 0 : neutrals.has(colour) ? 10 : colour === "multicolour" ? 2 : profile.polished ? ["pink", "purple"].includes(colour) ? 7 : 3 : 8 },
-    { label: "Material", weight: 5, available: !!kind, earned: !kind ? 0 : profile.polished ? { polished: 5, light: 4, relaxed: 2, heavy: 1, rain: 2 }[kind] : { polished: 4, light: 5, relaxed: 5, heavy: 3, rain: 4 }[kind] },
+    { label: "Material", weight: 5, available: !!kind, provided: materialProvided(item.material), earned: !kind ? 0 : profile.polished ? { polished: 5, light: 4, relaxed: 2, heavy: 1, rain: 2, synthetic: 2 }[kind] : { polished: 4, light: 5, relaxed: 5, heavy: 3, rain: 4, synthetic: 4 }[kind] },
   ];
   return { name: item.name || "This piece", itemId: item.itemId || item.productId, earned: components.reduce((n, c) => n + c.earned, 0), weight: 60, components, enoughData: components.every(c => c.available) };
 }
@@ -78,7 +83,10 @@ function colourScore(a, b) {
   return 0.6;
 }
 function weatherRating(item, weather) {
-  if (!weather?.available || item.category === "Accessories" || !materialKind(item.material)) return null;
+  const kind = materialKind(item.material);
+  // A generic plastic label earns partial occasion points, but does not establish
+  // breathability or rain protection. Explicit waterproof/rubber labels still use their existing rules.
+  if (!weather?.available || item.category === "Accessories" || !kind || kind === "synthetic") return null;
   const material = lower(item.material), tags = array(weather.tags);
   const warm = tags.includes("Warm") || Number.isFinite(weather.temperature) && weather.temperature >= 26;
   const cool = !warm && (tags.includes("Cool") || Number.isFinite(weather.temperature));
@@ -252,8 +260,10 @@ function assessSelection(pieces, occasion, styles, weather) {
       comments.push({ kind: "warning", text: `${item.name} is not suitable for ${occasion.toLowerCase()}.` });
       comments.push({ kind: "suggestion", text: `Try ${profiles[occasion].tip}.` });
     } else if (item.components.some(c => !c.available)) {
-      const missing = item.components.filter(c => !c.available).map(c => c.label.toLowerCase());
-      comments.push({ kind: "suggestion", text: `Try adding ${missing.join(" and ")} details for ${item.name}.` });
+      const missing = item.components.filter(c => !c.available && !c.provided).map(c => c.label.toLowerCase());
+      if (missing.length) comments.push({ kind: "suggestion", text: `Try adding ${missing.join(" and ")} details for ${item.name}.` });
+      if (item.components.some(c => c.label === "Material" && !c.available && c.provided))
+        comments.push({ kind: "suggestion", text: `The material for ${item.name} is saved, but its suitability is not assessed yet.` });
     } else if (item.earned < 36) {
       comments.push({ kind: "suggestion", text: `Try ${profiles[occasion].tip}.` });
     }

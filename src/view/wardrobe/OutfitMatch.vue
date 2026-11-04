@@ -767,7 +767,7 @@ watch(
               <section v-for="item in selection.scoreDetails.itemDetails" :key="item.itemId || item.name">
                 <strong>{{ item.name }} · {{ item.earned }} / 60 occasion points</strong>
                 <div v-for="part in item.components" :key="part.label" class="wd-score-detail-row">
-                  <span>{{ part.label }}</span><span>{{ part.available ? `${part.earned} / ${part.weight}` : `Unknown · 0 / ${part.weight}` }}</span>
+                  <span>{{ part.label }}</span><span>{{ part.available ? `${part.earned} / ${part.weight}` : `${part.provided ? 'Not assessed' : 'Unknown'} · 0 / ${part.weight}` }}</span>
                 </div>
               </section>
               <p>Colour pairs: neutral 100%, same or complementary 67%, other known pairs 20%.
