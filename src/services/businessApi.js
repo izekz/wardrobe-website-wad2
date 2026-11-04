@@ -59,6 +59,24 @@ export const catalogApi = (path, options) => call('/api/catalog', path, options)
 export const sendJson = (method, data) => ({ method, body: JSON.stringify(data) })
 
 // Turns a chosen image file into the data: URL format the backend expects.
+// Person 4: colour photos are shrunk in the browser so several fit in one save.
+export async function readColourPhoto(file) {
+  const dataUrl = await readPhoto(file)
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('The photo could not be read. Please choose it again.'))
+    img.src = dataUrl
+  })
+  const scale = Math.min(1, 1000 / Math.max(image.naturalWidth, image.naturalHeight))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale)
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/jpeg', 0.8)
+}
+
 export function readPhoto(file) {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
     return Promise.reject(new Error('Choose a JPG, PNG or WebP image smaller than 5 MB.'))

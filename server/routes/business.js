@@ -50,6 +50,7 @@ function createCatalogRouter(models = defaultModels) {
   router.get('/products/:id', controller.getCatalogProduct);
   router.post('/products/:id/skip', controller.skipProduct);
   router.get('/products/:id/image', controller.getProductImage);
+  router.get('/products/:id/colour-image/:colour', controller.getProductColourImage);
   router.get('/products/:id/size-image', controller.getProductSizeImage);
   router.get('/businesses/:id/logo', controller.getBusinessLogo);
   router.use(handleBusinessError);

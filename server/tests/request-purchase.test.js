@@ -60,7 +60,7 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     const profile = await api('/business/profile', 'seller', 'PUT', { businessName: 'Minimalist Studio', description: 'Everyday pieces.', styles: ['Minimalist'], contact: 'studio@example.test', logo: png });
     assert.equal(profile.status, 201);
     const product = await api('/business/products', 'seller', 'POST', { name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist', stock: 3,
-      colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'], sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.', photo: png });
+      colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'], sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.', photo: png, colourPhotos: { Black: png } });
     assert.equal(product.status, 201); productId = product.body.product.productId;
     requestId = await postRequest();
     const reply = await api(`/business/requests/${requestId}/responses`, 'seller', 'POST', { productId, message: 'This fits your presentation and budget.' });

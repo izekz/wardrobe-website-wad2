@@ -10,7 +10,7 @@ const { productInput } = require('../businessValidation');
 const { listedColours } = require('../services/listedColours');
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 const details = { name: 'Everyday shirt', price: 38, category: 'Tops', style: 'Minimalist', colours: ['White', 'Black'], material: '  Linen  ',
-  stock: 3, occasions: ['Presentation'], sizes: ['M'], description: 'Pair with blue jeans.', photo: png };
+  stock: 3, occasions: ['Presentation'], sizes: ['M'], description: 'Pair with blue jeans.', photo: png, colourPhotos: { Black: png } };
 
 test('product metadata is required and validated with the wardrobe colour palette and material limit', async () => {
   assert.equal(productInput(details, { photoRequired: true }).material, 'Linen');
@@ -59,7 +59,7 @@ test('business product create/edit persists metadata, keeps photos and passes tr
   assert.equal(created.body.product.material, 'Linen');
   assert.deepEqual(created.body.product.availableColours, ['White', 'Black']);
   assert.equal((await models.Product.findById(id)).material, 'Linen');
-  const edit = { ...details, colours: ['Black', 'Navy'], material: 'Cotton' }; delete edit.photo;
+  const edit = { ...details, colours: ['Black', 'Navy'], material: 'Cotton', colourPhotos: { Navy: png } }; delete edit.photo;
   assert.equal((await api(`/business/products/${id}`, 'PUT', edit, 'other')).status, 404);
   const edited = await api(`/business/products/${id}`, 'PUT', edit);
   assert.equal(edited.status, 200);
@@ -84,7 +84,7 @@ test('business product create/edit persists metadata, keeps photos and passes tr
   for (const productColour of ['Red', ['Black', 'Navy']])
     assert.equal((await api('/wardrobe/selection', 'POST', { occasion: 'Presentation', itemIds: [], productId: id, productColour }, 'customer')).status, 400);
   // A business shoe and a private wardrobe shoe use their saved plastic material.
-  const plasticProduct = await api('/business/products', 'POST', { ...details, name: 'ASICS shoe', category: 'Shoes', colours: ['Black'], material: 'plastic' });
+  const plasticProduct = await api('/business/products', 'POST', { ...details, name: 'ASICS shoe', category: 'Shoes', colours: ['Black'], material: 'plastic', sizes: ['9'] });
   assert.equal(plasticProduct.status, 201);
   const storeSelection = await api('/wardrobe/selection', 'POST', { occasion: 'Presentation', itemIds: [], productId: plasticProduct.body.product.productId, productColour: 'Black' }, 'customer');
   assert.equal(storeSelection.status, 200);
