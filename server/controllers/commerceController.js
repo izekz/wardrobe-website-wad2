@@ -28,4 +28,79 @@ async function checkout(req,res){
     throw error;
   }
 }
-module.exports={checkout};
+
+// Account shopping state is private and stored separately from public profile data.
+const User = require('../models/User');
+const { listedColours } = require('../services/listedColours');
+const lineKey = line => `${line.productId}:${line.size || ''}:${line.colour || ''}`;
+
+function createShoppingController(models = { User, Product }) {
+  async function account(req) {
+    const user = await models.User.findOne({ _id: req.user.id, role: 'consumer', suspended: { $ne: true } })
+      .select('+likedProducts +cartItems');
+    if (!user) fail(401, 'Please log in to continue.');
+    return user;
+  }
+  async function productsFor(ids) {
+    const rows = ids.length ? await models.Product.find({ _id: { $in: [...new Set(ids)] } })
+      .select('_id businessName name price stock status sizes colour colours description') : [];
+    return new Map(rows.map(product => [String(product._id), product]));
+  }
+  function validVariant(product, line) {
+    const colours = listedColours(product);
+    return (!product.sizes?.length ? !line.size : product.sizes.includes(line.size)) &&
+      (!colours.length ? !line.colour : colours.includes(line.colour));
+  }
+  function cartJson(lines, products) {
+    return lines.map(line => {
+      const productId = String(line.productId), product = products.get(productId);
+      return { key: lineKey({ ...line, productId }), productId, size: line.size || '', colour: line.colour || '', quantity: line.quantity,
+        name: product?.name || 'Unavailable product', price: product?.price ?? 0,
+        businessName: product?.businessName || '', imageURL: `/api/catalog/products/${productId}/image`, stock: product?.stock || 0,
+        available: !!product && product.status === 'active' && product.stock >= line.quantity && validVariant(product, line) };
+    });
+  }
+  async function getShop(req, res) {
+    const user = await account(req);
+    const liked = (user.likedProducts || []).map(String), lines = (user.cartItems || []).map(line => ({
+      productId: String(line.productId), size: line.size || '', colour: line.colour || '', quantity: line.quantity,
+    }));
+    const products = await productsFor([...liked, ...lines.map(line => line.productId)]);
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ userId: req.user.id, liked: liked.filter(id => products.get(id)?.status === 'active'), cart: cartJson(lines, products) });
+  }
+  async function setLike(req, res) {
+    const productId = req.params.productId, liked = req.body?.liked;
+    if (!mongoose.isObjectIdOrHexString(productId) || typeof liked !== 'boolean') fail(400, 'Choose a valid product and liked state.');
+    if (liked && !await models.Product.findOne({ _id: productId, status: 'active' })) fail(404, 'This product is unavailable.');
+    const update = liked ? { $addToSet: { likedProducts: productId } } : { $pull: { likedProducts: productId } };
+    const user = await models.User.findOneAndUpdate({ _id: req.user.id, role: 'consumer', suspended: { $ne: true } }, update, { new: true, runValidators: true });
+    if (!user) fail(401, 'Please log in to continue.');
+    res.json({ userId: req.user.id, productId, liked });
+  }
+  async function setCart(req, res) {
+    if (!Array.isArray(req.body?.cart) || req.body.cart.length > 30) fail(400, 'Choose up to 30 cart items.');
+    const lines = req.body.cart.map(line => {
+      if (!line || !mongoose.isObjectIdOrHexString(line.productId) || !Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 10 ||
+          typeof line.size !== 'string' || line.size.length > 20 || typeof line.colour !== 'string' || line.colour.length > 20)
+        fail(400, 'Choose valid products, quantities, sizes and colours.');
+      return { productId: String(line.productId), size: line.size, colour: line.colour, quantity: line.quantity };
+    });
+    if (new Set(lines.map(lineKey)).size !== lines.length) fail(400, 'Combine duplicate cart items first.');
+    const user = await account(req), products = await productsFor(lines.map(line => line.productId));
+    const previous = new Map((user.cartItems || []).map(line => [lineKey(line), line]));
+    for (const line of lines) {
+      const product = products.get(line.productId), old = previous.get(lineKey(line));
+      // Keep an existing unavailable item removable without blocking changes to other lines.
+      const retained = old && line.quantity <= old.quantity;
+      if ((!product || product.status !== 'active' || !validVariant(product, line) || product.stock < line.quantity) && !retained)
+        fail(409, 'A cart item is unavailable in that size, colour or quantity. Refresh your cart.');
+    }
+    const updated = await models.User.findOneAndUpdate({ _id: req.user.id, role: 'consumer', suspended: { $ne: true } },
+      { $set: { cartItems: lines } }, { new: true, runValidators: true });
+    if (!updated) fail(401, 'Please log in to continue.');
+    res.json({ userId: req.user.id, cart: cartJson(lines, products) });
+  }
+  return { getShop, setLike, setCart };
+}
+module.exports = { checkout, createShoppingController, ...createShoppingController() };

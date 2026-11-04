@@ -171,12 +171,29 @@ test('touch swipes scroll natively; only swipes that start at bottom loop', () =
   assert.equal(viewer.scrollTop, 0)
 })
 
-test('sponsored impression counts once even if revisited', () => {
+test('a return to a sponsored video counts another impression, but no duplicate from the same activation', () => {
   const { feed } = setup()
   feed.navigate(1)
   feed.navigate(-1)
   feed.navigate(1)
-  assert.deepEqual(feed.tracked, [['B', 'impression']])
+  assert.deepEqual(feed.tracked, [['B', 'impression'], ['B', 'impression']])
+})
+
+test('natural video loops count distinct watched playbacks; seeking is not a new view', () => {
+  const { feed } = setup()
+  const post = feed.videos[0]
+  const video = { currentTime: 0, duration: 4, paused: false, seeking: false }
+  // Simulate two ordinary loops of 4-second video with timeupdate callbacks.
+  for (const time of [0.5, 1.0, 1.5, 2.1, 2.7, 3.5, 3.9, 0.1, 0.6, 1.1, 1.7, 2.2, 2.7]) {
+    video.currentTime = time
+    feed.onProgress(post, { target: video })
+  }
+  assert.deepEqual(feed.tracked, [['A', 'view'], ['A', 'view']])
+  feed.seekVideo = () => {}
+  video.seeking = true
+  video.currentTime = 0.1
+  feed.onProgress(post, { target: video })
+  assert.equal(feed.tracked.length, 2)
 })
 
 test('empty and one-video feeds do not navigate or wrap', () => {

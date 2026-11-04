@@ -215,7 +215,7 @@ function createWardrobeController(
     });
   }
 
-  async function save(req, res) {
+  async function outfitInput(req) {
     const name = v.text(req.body?.name, "Outfit name", 80),
       occasion = v.occasionInput(req.body?.occasion),
       eventDate = v.dateInput(req.body?.date),
@@ -240,48 +240,59 @@ function createWardrobeController(
       throw v.badRequest(
         "An outfit needs shoes and either a dress or a top and bottom.",
       );
-    const outfit = await Outfit.create({
-      userId: owner(req),
-      name,
-      occasion,
-      eventDate,
-      pieces,
-    });
+    return { name, occasion, eventDate, pieces };
+  }
+  function savedJson(outfit, available) {
+    return {
+      outfitId: String(outfit._id), name: outfit.name, occasion: outfit.occasion,
+      eventDate: outfit.eventDate, createdAt: outfit.createdAt,
+      pieces: outfit.pieces.map(piece => ({
+        itemId: piece.itemId, productId: piece.productId, name: piece.name,
+        category: piece.category, colour: piece.colour, style: piece.style,
+        occasions: piece.occasions, source: piece.source, price: piece.price,
+        missing: piece.source === "wardrobe" && !available.has(piece.itemId),
+        imageURL: piece.source === "wardrobe"
+          ? available.has(piece.itemId) ? `/api/wardrobe/items/${piece.itemId}/image` : null
+          : `/api/catalog/products/${piece.productId}/image`,
+      })),
+    };
+  }
+  async function save(req, res) {
+    const data = await outfitInput(req);
+    const outfit = await Outfit.create({ ...data, userId: owner(req) });
     res.status(201).json({ outfitId: String(outfit._id) });
+  }
+  async function updateSaved(req, res) {
+    const filter = { _id: id(req.params.id), userId: owner(req) };
+    if (!await Outfit.findOne(filter)) return res.status(404).json({ message: "Outfit not found." });
+    const data = await outfitInput(req);
+    const outfit = await Outfit.findOneAndUpdate(filter, { $set: data }, { new: true, runValidators: true });
+    if (!outfit) return res.status(404).json({ message: "Outfit not found." });
+    res.json({ outfitId: String(outfit._id) });
+  }
+  async function getSaved(req, res) {
+    const outfit = await Outfit.findOne({ _id: id(req.params.id), userId: owner(req) });
+    if (!outfit) return res.status(404).json({ message: "Outfit not found." });
+    const items = await Item.find({ userId: owner(req) });
+    const result = savedJson(outfit, new Set(items.map(item => String(item._id))));
+    // Keep snapshots for display, but do not preselect an unavailable store variant.
+    for (const piece of result.pieces.filter(piece => piece.source === "store")) {
+      try { await storeProduct(piece.productId, piece.colour || undefined); }
+      catch (error) {
+        if (![400, 404].includes(error.status)) throw error;
+        piece.missing = true;
+        piece.imageURL = null;
+      }
+    }
+    res.json({ outfit: result });
   }
   async function saved(req, res) {
     const [outfits, items] = await Promise.all([
       Outfit.find({ userId: owner(req) }).sort({ createdAt: -1 }),
       Item.find({ userId: owner(req) }),
     ]);
-    const available = new Set(items.map((i) => String(i._id)));
-    res.json({
-      outfits: outfits.map((o) => ({
-        outfitId: String(o._id),
-        name: o.name,
-        occasion: o.occasion,
-        eventDate: o.eventDate,
-        createdAt: o.createdAt,
-        pieces: o.pieces.map((p) => ({
-          itemId: p.itemId,
-          productId: p.productId,
-          name: p.name,
-          category: p.category,
-          colour: p.colour,
-          style: p.style,
-          occasions: p.occasions,
-          source: p.source,
-          price: p.price,
-          missing: p.source === "wardrobe" && !available.has(p.itemId),
-          imageURL:
-            p.source === "wardrobe"
-              ? available.has(p.itemId)
-                ? `/api/wardrobe/items/${p.itemId}/image`
-                : null
-              : `/api/catalog/products/${p.productId}/image`,
-        })),
-      })),
-    });
+    const available = new Set(items.map(item => String(item._id)));
+    res.json({ outfits: outfits.map(outfit => savedJson(outfit, available)) });
   }
   async function deleteSaved(req, res) {
     const doc = await Outfit.findOneAndDelete({
@@ -303,6 +314,8 @@ function createWardrobeController(
     selection,
     save,
     saved,
+    getSaved,
+    updateSaved,
     deleteSaved,
   };
 }

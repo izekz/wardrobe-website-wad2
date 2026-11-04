@@ -465,6 +465,77 @@ test("Private wardrobe HTTP workflows", async (t) => {
       );
     },
   );
+  await t.test("saved outfit editing keeps its ID, checks ownership and validates every replacement", async () => {
+    const create = await api("/outfits", "POST", {
+      name: "Original look", occasion: "Presentation", date: singaporeToday(),
+      itemIds: [top.itemId, bottom.itemId, shoes.itemId],
+    });
+    assert.equal(create.status, 201);
+    const outfitId = create.body.outfitId, url = "/outfits/" + outfitId;
+    const original = (await api(url)).body.outfit;
+    assert.equal(original.name, "Original look");
+    assert.equal(original.pieces.length, 3);
+    assert.equal((await api(url, "GET", null, "bob")).status, 404);
+    assert.equal((await api(url, "PUT", { name: "Forged" }, "bob")).status, 404);
+    assert.equal((await api(url, "GET", null, null)).status, 401);
+    assert.equal((await api(url, "PUT", {}, null)).status, 401);
+    assert.equal((await api("/outfits/not-an-id")).status, 404);
+    const dress = (await api("/items", "POST", input({ name: "Edit dress", category: "Dresses", style: ["Classic"] }))).body.item;
+    const replacement = { name: "Updated look", occasion: "Casual outing", date: singaporeToday(), itemIds: [dress.itemId, shoes.itemId], userId: "bob" };
+    const count = models.Outfit.rows.length;
+    const update = await api(url, "PUT", replacement);
+    assert.equal(update.status, 200);
+    assert.equal(update.body.outfitId, outfitId);
+    assert.equal(models.Outfit.rows.length, count, "editing must not create another saved outfit");
+    const result = (await api(url)).body.outfit;
+    assert.equal(result.outfitId, outfitId);
+    assert.equal(result.createdAt, original.createdAt);
+    assert.equal(result.name, "Updated look");
+    assert.equal(result.occasion, "Casual outings");
+    assert.deepEqual(result.pieces.map(piece => piece.itemId).sort(), [dress.itemId, shoes.itemId].sort());
+    const foreign = (await api("/items", "POST", input(), "bob")).body.item;
+    for (const changes of [
+      { name: "" }, { itemIds: [] }, { itemIds: [dress.itemId] }, { itemIds: [dress.itemId, dress.itemId, shoes.itemId] },
+      { itemIds: [foreign.itemId, bottom.itemId, shoes.itemId] }, { itemIds: [dress.itemId, top.itemId, shoes.itemId] },
+      { date: "2026-02-30" }, { date: "2000-01-01" },
+    ]) {
+      const invalid = await api(url, "PUT", { ...replacement, ...changes });
+      assert.equal(invalid.status, 400, JSON.stringify(changes));
+      assert.deepEqual((await api(url)).body.outfit, result, "a failed update must preserve the saved outfit");
+    }
+    await api("/items/" + dress.itemId, "DELETE");
+    assert.equal((await api(url)).body.outfit.pieces.find(piece => piece.itemId === dress.itemId).missing, true);
+    await api(url, "DELETE");
+    assert.equal((await api(url)).status, 404);
+    assert.equal((await api(url, "PUT", replacement)).status, 404);
+  });
+  await t.test("edit details preserve the selected store colour and mark unavailable store pieces without losing the outfit", async () => {
+    const product = await models.Product.create({
+      businessId: "edit-shop", businessName: "Edit shop", name: "Edit blazer", category: "Jackets", style: "Classic",
+      colours: ["Black", "White"], material: "Linen", sizes: ["M"], price: 39, stock: 2, description: "Edit test",
+      photo: { data: Buffer.from(png.split(",")[1], "base64"), contentType: "image/png" },
+    });
+    const body = { name: "With store pick", occasion: "Presentation", date: singaporeToday(), itemIds: [top.itemId, bottom.itemId, shoes.itemId], productId: String(product._id), productColour: "Black" };
+    const saved = await api("/outfits", "POST", body), url = "/outfits/" + saved.body.outfitId;
+    assert.equal(saved.status, 201);
+    const before = (await api(url)).body.outfit;
+    assert.equal(before.pieces.find(piece => piece.source === "store").colour, "Black");
+    assert.equal(before.pieces.find(piece => piece.source === "store").missing, false);
+    assert.equal((await api(url, "PUT", { ...body, name: "New store look", product: { name: "Forged", price: 0 } })).status, 200);
+    assert.equal((await api(url)).body.outfit.pieces.find(piece => piece.source === "store").price, 39);
+    product.colours = ["White"];
+    const unavailableVariant = (await api(url)).body.outfit;
+    assert.equal(unavailableVariant.pieces.find(piece => piece.source === "store").missing, true);
+    assert.equal((await api(url, "PUT", body)).status, 400);
+    product.colours = ["Black", "White"]; product.stock = 0;
+    assert.equal((await api(url)).body.outfit.pieces.find(piece => piece.source === "store").missing, true);
+    assert.equal((await api(url, "PUT", body)).status, 404);
+    assert.equal((await api(url)).body.outfit.pieces.length, 4);
+    const withoutStore = { ...body, productId: undefined, productColour: undefined, name: "Wardrobe only" };
+    assert.equal((await api(url, "PUT", withoutStore)).status, 200);
+    assert.equal((await api(url)).body.outfit.pieces.length, 3);
+    await api(url, "DELETE");
+  });
   await t.test(
     "save checks ownership, lists privately and marks deleted pieces",
     async () => {

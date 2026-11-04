@@ -78,16 +78,42 @@ test('boost refuses unavailable products without spending a coin', async () => {
   assert.equal(debited, false);
 });
 
-test('a business cannot delete unused paid time on an active or paused boost', async () => {
+test('a business may delete ordinary, active-boosted, or paused-boosted videos', async () => {
+  Business.findOne = async () => ({ _id: businessId });
+  for (const state of ['ordinary', 'active', 'paused']) {
+    let deletes = 0;
+    StyleVideo.findOne = async () => ({
+      _id: videoId, businessId, productId,
+      boostedUntil: state === 'ordinary' ? null : new Date(Date.now() + 86400000),
+      boostPausedAt: state === 'paused' ? new Date() : null,
+      deleteOne: async () => { deletes++ },
+    });
+    const response = await call(`/${videoId}`, 'DELETE');
+    assert.equal(response.status, 200, `delete ${state} video`);
+    assert.equal((await response.json()).message, 'Video deleted.');
+    assert.equal(deletes, 1, `delete exactly one ${state} video`);
+  }
+});
+
+test("a business cannot delete another business\'s video", async () => {
   Business.findOne = async () => ({ _id: businessId });
   let deletes = 0;
-  StyleVideo.findOne = async () => ({ _id: videoId, businessId, productId,
-    boostedUntil: new Date(Date.now() + 86400000), boostPausedAt: new Date(),
-    deleteOne: async () => { deletes++ } });
+  StyleVideo.findOne = async query => {
+    assert.equal(query.businessId, businessId, 'ownership is checked in the database query');
+    return null;
+  };
   const response = await call(`/${videoId}`, 'DELETE');
-  assert.equal(response.status, 409);
-  assert.match((await response.json()).message, /unused paid promotion time/i);
+  assert.equal(response.status, 404);
   assert.equal(deletes, 0);
+});
+
+test('Style Feed Studio allows deleting active boosts and warns about forfeiting remaining promotion', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.resolve(__dirname, '../../src/view/business/StyleVideos.vue'), 'utf8');
+  assert.doesNotMatch(source, /:disabled="busy !== '' \|\| post\.boostRemainingMs > 0"/);
+  assert.match(source, /post\.boostRemainingMs > 0[\s\S]*?window\.confirm\(message\)/);
+  assert.match(source, /remaining promotion time and coins spent will not be refunded/i);
 });
 
 test('video endpoint supports range seeking and invalid-range responses', async () => {

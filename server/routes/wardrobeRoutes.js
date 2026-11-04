@@ -23,6 +23,8 @@ function createWardrobeRouter(models, weatherProvider) {
   router.post("/selection", trustedBrowser, c.selection);
   router.get("/outfits", c.saved);
   router.post("/outfits", trustedBrowser, c.save);
+  router.get("/outfits/:id", c.getSaved);
+  router.put("/outfits/:id", trustedBrowser, c.updateSaved);
   router.delete("/outfits/:id", trustedBrowser, c.deleteSaved);
   router.use(handleWardrobeError);
   return router;

@@ -188,11 +188,11 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     assert.deepEqual(results.map(result => result.status).sort(), [201, 409]);
     assert.equal((await models.Product.findById(productId)).stock, 0);
     const paused = await models.StyleVideo.findById(finalStockBoostVideoId);
-    assert.ok(paused.boostPausedAt, 'the last-unit checkout must pause the associated paid boost');
+    assert.equal(paused.boostPausedAt, null, 'the last-unit checkout leaves the video promotion running for brand exposure');
   });
   await t.test('Restocking through the business UI resumes exactly the unused promotion time', async () => {
     const paused = await models.StyleVideo.findById(finalStockBoostVideoId);
-    const oldRemaining = paused.boostedUntil - paused.boostPausedAt;
+    const originalExpiry = paused.boostedUntil;
     const edit = await api(`/business/products/${productId}`, 'seller', 'PUT', {
       name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist', stock: 2,
       colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'], sizes: ['S', 'M', 'L'],
@@ -202,8 +202,8 @@ test('Request suggestions, owner controls and demo checkout', async t => {
     const restored = await models.StyleVideo.findById(finalStockBoostVideoId);
     assert.equal(restored.boostPausedAt == null, true);
     assert.ok(restored.boostedUntil > new Date());
-    assert.ok(Math.abs((restored.boostedUntil - Date.now()) - oldRemaining) < 2000,
-      'resuming should give the business its unused boost time, not buy a fresh seven days');
+    assert.equal(+restored.boostedUntil, +originalExpiry,
+      'restocking should not extend a promotion that never paused');
     const productInput = { name: 'Structured Beige Jacket', price: 38, category: 'Jackets', style: 'Minimalist',
       stock: 2, colours: ['Beige', 'Black'], material: 'Cotton', occasions: ['Presentation'],
       sizes: ['S', 'M', 'L'], description: 'A light cotton jacket.' };

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import "../../assets/styles/wardrobe.css";
 import ClothingCard from "../../components/ClothingCard.vue";
@@ -14,6 +14,7 @@ import {
   categories,
   categoryName,
   matchesSearch,
+  normalizeOccasion,
 } from "../../services/wardrobeService";
 const route = useRoute(),
   router = useRouter();
@@ -34,12 +35,14 @@ const occasion = ref("Presentation"),
   style = ref(""),
   name = ref(""),
   initialized = ref(false);
-const productId = computed(() =>
-  typeof route.query.productId === "string" ? route.query.productId : undefined,
-);
-const productColour = computed(() =>
-  typeof route.query.colour === "string" ? route.query.colour : undefined,
-);
+const editOutfitId = computed(() => typeof route.query.outfitId === "string" ? route.query.outfitId : undefined);
+const isEditing = computed(() => !!editOutfitId.value);
+const loadedOutfitId = ref(null), editStorePiece = ref(null), editNotices = ref([]);
+function noteEdit(message) { if (!editNotices.value.includes(message)) editNotices.value.push(message); }
+const productId = computed(() => isEditing.value ? editStorePiece.value?.productId :
+  typeof route.query.productId === "string" ? route.query.productId : undefined);
+const productColour = computed(() => isEditing.value ? editStorePiece.value?.colour || undefined :
+  typeof route.query.colour === "string" ? route.query.colour : undefined);
 const candidates = computed(() =>
   [...items.value, ...(product.value ? [product.value] : [])].sort((a, b) =>
     (b.recommendation?.priority || 0) - (a.recommendation?.priority || 0) ||
@@ -117,6 +120,8 @@ const scoreLabel = computed(() =>
 );
 const canSave = computed(
   () =>
+    !loading.value &&
+    (!isEditing.value || loadedOutfitId.value === editOutfitId.value) &&
     chosenCount.value > 0 &&
     selection.value?.complete &&
     !busy.value &&
@@ -126,8 +131,10 @@ const canSave = computed(
 );
 let generation = 0,
   scoreRequest = 0,
+  plannerLoad = 0,
   loadedProductId;
 onBeforeUnmount(() => {
+  plannerLoad++;
   generation++;
   scoreRequest++;
 });
@@ -185,6 +192,8 @@ async function generate() {
     items.value = result.items;
     product.value = result.product;
     weather.value = result.weather;
+    if (isEditing.value && selectedIds.value.some(id => !items.value.some(item => item.itemId === id)))
+      noteEdit("A saved piece is no longer in your wardrobe. Choose a replacement before updating.");
     selectedIds.value = selectedIds.value.filter((id) =>
       items.value.some((item) => item.itemId === id),
     );
@@ -198,8 +207,21 @@ async function generate() {
     } else if (!product.value) {
       selectedProduct.value = false;
     }
+    if (isEditing.value) {
+      const compatible = selectedProduct.value && product.value ? [product.value] : [];
+      const retained = [];
+      for (const itemId of selectedIds.value) {
+        const piece = items.value.find(item => item.itemId === itemId);
+        if (piece && !compatible.some(other => piecesConflict(other, piece))) {
+          compatible.push(piece);
+          retained.push(itemId);
+        } else noteEdit("Some saved pieces have changed categories. Choose one piece per category before updating.");
+      }
+      selectedIds.value = retained;
+    }
     loadedProductId = productId.value;
     await assess();
+    return true;
   } catch (e) {
     if (version === generation) error.value = e.message;
   } finally {
@@ -247,10 +269,11 @@ async function save() {
   }
   saving.value = true;
   error.value = "";
+  const version = plannerLoad;
   try {
     await wardrobeApi(
-      "/outfits",
-      send("POST", {
+      isEditing.value ? `/outfits/${encodeURIComponent(editOutfitId.value)}` : "/outfits",
+      send(isEditing.value ? "PUT" : "POST", {
         name: name.value,
         occasion: occasion.value,
         date: date.value,
@@ -258,21 +281,82 @@ async function save() {
         ...(selectedProduct.value ? { productId: productId.value, productColour: productColour.value } : {}),
       }),
     );
-    await router.push({ name: "saved-outfits" });
+    if (version === plannerLoad) await router.push({ name: "saved-outfits" });
   } catch (e) {
     error.value = e.message;
   } finally {
     saving.value = false;
   }
 }
-onMounted(async () => {
-  initialized.value = true;
-  await generate();
-  loading.value = false;
-});
+async function loadPlanner() {
+  const version = ++plannerLoad;
+  initialized.value = false;
+  generation++;
+  scoreRequest++;
+  loading.value = true;
+  busy.value = false;
+  scoring.value = false;
+  error.value = "";
+  editNotices.value = [];
+  loadedOutfitId.value = null;
+  editStorePiece.value = null;
+  loadedProductId = undefined;
+  selectedIds.value = [];
+  selectedProduct.value = false;
+  selection.value = null;
+  items.value = [];
+  product.value = null;
+  weather.value = null;
+  name.value = "";
+  occasion.value = "Presentation";
+  date.value = today();
+  style.value = "";
+  search.value = "";
+  category.value = "";
+  try {
+    if (isEditing.value) {
+      const result = await wardrobeApi(`/outfits/${encodeURIComponent(editOutfitId.value)}`);
+      if (version !== plannerLoad) return;
+      const outfit = result.outfit;
+      name.value = outfit.name;
+      occasion.value = normalizeOccasion(outfit.occasion);
+      if (outfit.eventDate && outfit.eventDate >= today()) date.value = outfit.eventDate;
+      else if (outfit.eventDate) noteEdit("This outfit’s planned date has passed. The date is now set to today; you can choose another date.");
+      const missing = outfit.pieces.filter(piece => piece.missing);
+      if (missing.length) noteEdit(`These pieces are no longer available and were not added: ${missing.map(piece => piece.name).join(", ")}. Choose replacements before updating.`);
+      selectedIds.value = outfit.pieces.filter(piece => piece.source === "wardrobe" && !piece.missing).map(piece => piece.itemId);
+      editStorePiece.value = outfit.pieces.find(piece => piece.source === "store" && !piece.missing) || null;
+      selectedProduct.value = !!editStorePiece.value;
+      loadedProductId = editStorePiece.value?.productId;
+    }
+    // Ignore filter/selection watchers while restoring the saved outfit.
+    await nextTick();
+    if (version !== plannerLoad) return;
+    initialized.value = true;
+    const success = await generate();
+    if (version === plannerLoad && success && isEditing.value) loadedOutfitId.value = editOutfitId.value;
+  } catch (e) {
+    if (version === plannerLoad) error.value = e.message;
+  } finally {
+    if (version === plannerLoad) loading.value = false;
+  }
+}
+function retryPlanner() {
+  if (isEditing.value && loadedOutfitId.value !== editOutfitId.value) loadPlanner();
+  else generate();
+}
+function removeEditStoreSuggestion() {
+  if (saving.value || busy.value) return;
+  editStorePiece.value = null;
+  selectedProduct.value = false;
+  product.value = null;
+}
+onMounted(loadPlanner);
+watch(editOutfitId, loadPlanner, { flush: "sync" });
 watch([occasion, date, style, productId, productColour], (values, previous) => {
+  if (!initialized.value) return;
   if (values[3] !== previous[3]) selectedProduct.value = false;
-  if (initialized.value) generate();
+  generate();
 });
 watch(
   [selectedIds, selectedProduct],
@@ -286,8 +370,9 @@ watch(
   <section class="wd-page wd-studio">
     <header class="wd-planner-heading">
       <p class="wd-eyebrow">YOUR PERSONAL STYLING STUDIO</p>
-      <h1>Build a look that feels like you</h1>
-      <p>Choose your pieces. See your outfit come together.</p>
+      <h1>{{ isEditing ? "Edit your outfit" : "Build a look that feels like you" }}</h1>
+      <p>{{ isEditing ? "Make your changes, then update your saved outfit." : "Choose your pieces. See your outfit come together." }}</p>
+      <RouterLink v-if="isEditing" class="community-text-button" :to="{ name: 'saved-outfits' }">Cancel editing</RouterLink>
     </header>
 
     <div class="wd-studio-toolbar">
@@ -332,14 +417,16 @@ watch(
 
     <p v-if="error" role="alert" class="community-error">
       {{ error }}
-      <button class="wd-link" :disabled="saving" @click="generate">Try again</button>
+      <button class="wd-link" :disabled="saving" @click="retryPlanner">Try again</button>
     </p>
+    <p v-for="message in editNotices" :key="message" class="wd-weather-note" role="status">{{ message }}</p>
     <p v-if="weather && !weather.available" class="wd-weather-note">{{ weather.message }}</p>
     <p v-if="loading || busy" role="status" class="wd-studio-loading">Finding recommendations for your wardrobe…</p>
-    <template v-else>
+    <template v-else-if="!isEditing || loadedOutfitId === editOutfitId">
       <p v-if="product" class="wd-product-note">
         Styling with <strong>{{ product.name }}</strong> · Store pick · S${{ Number(product.price).toFixed(2) }}
-        <RouterLink class="wd-remove-store" :to="{ name: 'outfit-match' }"><span aria-hidden="true">×</span> Remove store suggestion</RouterLink>
+        <button v-if="isEditing" type="button" class="wd-remove-store ms-2" :disabled="saving" @click="removeEditStoreSuggestion"><span aria-hidden="true">×</span> Remove store suggestion</button>
+        <RouterLink v-else class="wd-remove-store" :to="{ name: 'outfit-match' }"><span aria-hidden="true">×</span> Remove store suggestion</RouterLink>
       </p>
       <div v-if="!candidates.length" class="wd-empty">
         <span>✿</span>
@@ -551,8 +638,8 @@ watch(
           <button class="community-btn" :disabled="!canSave" @click="save">
             {{
               saving
-                ? "Saving…"
-                : !chosenCount
+                ? isEditing ? "Updating…" : "Saving…"
+                : isEditing ? "Update Outfit" : !chosenCount
                   ? "Choose pieces to save"
                   : !selection?.complete
                     ? "Complete your outfit to save"

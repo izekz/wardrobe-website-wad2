@@ -35,8 +35,8 @@ export default {
         const sizes = this.reply.product?.sizes || []
         this.form.size = sizes.length === 1 ? sizes[0] : ''
         // A listed colour is part of the item, not an arbitrary customer choice.
-        const selectedColour = this.$route.query.colour
-        this.form.colour = this.availableColours.includes(selectedColour) ? selectedColour : this.availableColours.length === 1 ? this.availableColours[0] : !this.availableColours.length ? 'Not specified' : ''
+        // Select the request purchase variant here, never during suggestion acceptance.
+        this.form.colour = this.availableColours.length === 1 ? this.availableColours[0] : !this.availableColours.length ? 'Not specified' : ''
       } catch (error) { if (version === this.loadVersion) this.error = error.message }
       finally { if (version === this.loadVersion) this.loading = false }
     },
@@ -76,7 +76,7 @@ export default {
       <div v-if="product" class="request-checkout-layout">
         <article class="community-panel"><img :src="product.imageURL" :alt="product.name" class="request-checkout-photo mb-4" /><p class="community-eyebrow">{{ product.businessName }}</p><h2>{{ product.name }}</h2><div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span class="community-tag lilac">{{ product.category }}</span></div><p>For: {{ request.title }}</p><p>Request budget: {{ money(request.budget) }}</p><p v-if="product.price > request.budget" class="community-muted">This item is {{ money(product.price - request.budget) }} above your budget.</p><p v-if="product.price !== reply.productPrice" class="community-muted">The price has changed since the suggestion. Review the current total before confirming.</p><div class="request-checkout-total"><strong>Demo total</strong><strong>{{ money(product.price) }}</strong></div></article>
         <form ref="checkoutForm" class="community-panel" @submit.prevent="confirmPurchase">
-          <h2>Make it yours</h2><p>Choose your size to complete the demo purchase.</p>
+          <h2>Make it yours</h2><p>Choose your size and, if available, colour to complete the demo purchase.</p>
           <fieldset class="border-0 p-0 m-0" :disabled="busy || !canPurchase">
             <label for="checkout-size">Size</label><select id="checkout-size" v-model="form.size" class="form-select" required><option disabled value="">Choose a size</option><option v-for="size in product.sizes" :key="size">{{ size }}</option></select>
             <template v-if="availableColours.length === 1">

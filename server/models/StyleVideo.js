@@ -20,6 +20,9 @@ const schema = new mongoose.Schema({
     sponsoredImpressions: { type: Number, default: 0 }, uniqueReach: { type: Number, default: 0 }
   },
   likesBy: { type: [String], default: [], select: false },
+  // Per-account counts cap genuine rewatches and repeat sponsored exposures at 10.
+  viewedBy: { type: [new mongoose.Schema({ userId: String, count: { type: Number, min: 0, max: 10 } }, { _id: false })], default: [], select: false },
+  boostImpressionsBy: { type: [new mongoose.Schema({ userId: String, count: { type: Number, min: 0, max: 10 } }, { _id: false })], default: [], select: false },
   sponsoredSeenBy: { type: [String], default: [], select: false },
   // Per-boost campaign reach: separate from all-time unique sponsored viewers.
   boostSeenBy: { type: [String], default: [], select: false },

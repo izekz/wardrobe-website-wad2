@@ -11,6 +11,7 @@ const connectDB = require("./config/db");
 const { createCommunityRouter, defaultModels } = require("./routes/community");
 const { router: styleFeedRouter } = require("./routes/styleFeed");
 const StyleVideo = require("./models/StyleVideo");
+const RequestContact = require('./models/RequestContact');
 // Person 4: business portal + store product catalogue.
 const { createBusinessRouter, createCatalogRouter, defaultModels: businessModels } = require("./routes/business");
 
@@ -73,7 +74,7 @@ async function startServer() {
     }
     await connectDB();
     await Promise.all([WardrobeItem.init(), SavedOutfit.init(), defaultModels.Purchase.init(), defaultModels.Listing.init(), defaultModels.Request.init(), defaultModels.Response.init(), User.init(), AuthSession.init(),
-      businessModels.Business.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init(), StyleVideo.init(), Order.init()]);
+      businessModels.Business.init(), RequestContact.init(), businessModels.Product.init(), businessModels.CoinTransaction.init(), businessModels.SkipFeedback.init(), StyleVideo.init(), Order.init()]);
 
     const port = process.env.PORT || 3000;
 

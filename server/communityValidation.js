@@ -1,11 +1,10 @@
 const CATEGORIES = ['Tops', 'Bottoms', 'Jackets', 'Dresses', 'Shoes', 'Accessories'];
 const STYLES = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic', 'Formal', 'Casual'];
+// New outfit requests follow the seven styles offered by the current survey.
+// Keep STYLES broader for legacy listings created before the survey update.
+const REQUEST_STYLES = ['Minimalist', 'Streetwear', 'Vintage', 'Y2K', 'Preppy', 'Classic', 'Romantic'];
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-// Open outfit requests a customer can have for free. Each one after that costs EXTRA_REQUEST_CREDITS credits.
-const FREE_REQUESTS = 5;
-const EXTRA_REQUEST_CREDITS = 10;
-const CREDIT_PACKAGES = [50, 100, 200];
 
 function badRequest(message) {
   const error = new Error(message);
@@ -86,8 +85,8 @@ function outfitRequestInput(body = {}) {
   return {
     title: text(body.title, 'What you are looking for', 100), occasion: text(body.occasion, 'Occasion', 80),
     description: text(body.description, 'Description', 1000), budget: money(body.budget, 'Budget'),
-    preferredStyle: choice(body.preferredStyle, STYLES, 'style'), deadline: deadline(body.deadline),
+    preferredStyle: choice(body.preferredStyle, REQUEST_STYLES, 'style'), deadline: deadline(body.deadline),
     clientRequestId: requestKey(body.clientRequestId)
   };
 }
-module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, FREE_REQUESTS, EXTRA_REQUEST_CREDITS, CREDIT_PACKAGES, badRequest, listingInput, outfitRequestInput, singaporeToday, photo, money, text, choice };
+module.exports = { CATEGORIES, STYLES, CONDITIONS, MAX_PHOTO_BYTES, REQUEST_STYLES, badRequest, listingInput, outfitRequestInput, singaporeToday, photo, money, text, choice };
