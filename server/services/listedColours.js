@@ -17,6 +17,14 @@ function listedColours(product = {}) {
   const specified = product.colours?.length ? product.colours
     : product.colors?.length ? product.colors : product.colour ?? product.color;
   const explicit = namesIn(Array.isArray(specified) ? specified.join(', ') : specified);
+  // Older listings ticked several colours but only have one photo. Offer just the
+  // colour that listing names; new multi-colour listings have a photo per colour.
+  if (explicit.length > 1 && !product.colourPhotos?.length) {
+    for (const source of [product.name, product.description]) {
+      const named = namesIn(source);
+      if (named.length === 1 && explicit.includes(named[0])) return named;
+    }
+  }
   if (explicit.length) return explicit;
 
   const description = String(product.description || '');

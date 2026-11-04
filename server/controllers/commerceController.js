@@ -50,7 +50,7 @@ function createShoppingController(models = { User, Product }) {
   }
   async function productsFor(ids) {
     const rows = ids.length ? await models.Product.find({ _id: { $in: [...new Set(ids)] } })
-      .select('_id businessName name price stock sizeStock status sizes colour colours description') : [];
+      .select('_id businessName name price stock sizeStock status sizes colour colours colourPhotos.colour colourPhotos.contentType description') : [];
     return new Map(rows.map(product => [String(product._id), product]));
   }
   function validVariant(product, line) {
@@ -63,7 +63,7 @@ function createShoppingController(models = { User, Product }) {
       const productId = String(line.productId), product = products.get(productId);
       return { key: lineKey({ ...line, productId }), productId, size: line.size || '', colour: line.colour || '', quantity: line.quantity,
         name: product?.name || 'Unavailable product', price: product?.price ?? 0,
-        businessName: product?.businessName || '', imageURL: `/api/catalog/products/${productId}/image`, stock: product ? stockForSize(product, line.size) : 0,
+        businessName: product?.businessName || '', imageURL: product?.colourPhotos?.some(row => row.colour === line.colour) ? `/api/catalog/products/${productId}/colour-image/${encodeURIComponent(line.colour)}` : `/api/catalog/products/${productId}/image`, stock: product ? stockForSize(product, line.size) : 0,
         available: !!product && product.status === 'active' && stockForSize(product, line.size) >= line.quantity && validVariant(product, line) };
     });
   }

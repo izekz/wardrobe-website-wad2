@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { badRequest, singaporeToday } = require('../communityValidation');
 const rules = require('../businessValidation');
 const { listedColours } = require('../services/listedColours');
+const { imageFor, resolveColourPhotos } = require('../services/colourPhotos');
 const { sizeStockMap } = require('../services/sizeStock');
 const { syncProductBoosts, remainingBoostMs } = require('../services/styleBoostAvailability');
 
@@ -71,6 +72,8 @@ function productJson(doc) {
     occasions: doc.occasions, sizes: doc.sizes, stock: doc.stock, sizeStock: sizeStockMap(doc), description: doc.description,
     colours, colour: colours.length === 1 ? colours[0] : null, material: doc.material || null,
     availableColours: colours,
+    colourImages: Object.fromEntries((doc.colourPhotos || []).filter(row => colours.includes(row.colour))
+      .map(row => [row.colour, `/api/catalog/products/${doc._id}/colour-image/${encodeURIComponent(row.colour)}`])),
     status: doc.status, boosted: doc.boosted, boostedUntil: doc.boostedUntil || null,
     premium: doc.premium, premiumUntil: doc.premiumUntil || null, views: doc.views,
     imageURL: `/api/catalog/products/${doc._id}/image`, sizeImageURL: doc.sizePhoto?.contentType ? `/api/catalog/products/${doc._id}/size-image` : null, createdAt: doc.createdAt
@@ -162,7 +165,8 @@ function createBusinessController(models = defaultModels) {
 
   async function createProduct(req, res) {
     let business = await myBusiness(req);
-    const input = rules.productInput(req.body, { photoRequired: true });
+    const { colourPhotoUploads, ...input } = rules.productInput(req.body, { photoRequired: true });
+    Object.assign(input, resolveColourPhotos({ colours: input.colours, photo: input.photo, uploads: colourPhotoUploads }));
     // The first few listings are free. Each one after that costs coins.
     const count = await Product.countDocuments({ businessId: String(business._id) });
     const product = new Product({ ...input, businessId: String(business._id), businessName: business.businessName });
@@ -177,8 +181,11 @@ function createBusinessController(models = defaultModels) {
 
   async function updateProduct(req, res) {
     const business = await myBusiness(req);
-    const product = await myProduct(req, business);
-    const input = rules.productInput(req.body, { photoRequired: false });
+    if (!idIsValid(req.params.id)) throw failure(404, 'Product not found.');
+    const product = await Product.findOne({ _id: req.params.id, businessId: String(business._id) }).select('+photo.data +colourPhotos.data');
+    if (!product) throw failure(404, 'Product not found.');
+    const { colourPhotoUploads, ...input } = rules.productInput(req.body, { photoRequired: false });
+    Object.assign(input, resolveColourPhotos({ colours: input.colours, photo: input.photo, uploads: colourPhotoUploads }, product));
     if (!input.photo) delete input.photo;
     if (!input.sizePhoto) delete input.sizePhoto;
     const wasAvailable = product.status === 'active';
@@ -531,6 +538,17 @@ function createBusinessController(models = defaultModels) {
   }
 
 
+  async function getProductColourImage(req, res) {
+    if (!idIsValid(req.params.id)) throw failure(404, 'Photo not found.');
+    const product = await Product.findById(req.params.id).select('+photo.data +colourPhotos.data');
+    const row = product?.colourPhotos?.find(entry => entry.colour === req.params.colour);
+    const image = row && imageFor(row, product.photo);
+    if (!image) throw failure(404, 'Photo not found.');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'private, max-age=300');
+    res.type(image.contentType).send(image.data);
+  }
+
   async function getProductSizeImage(req, res) {
     if (!idIsValid(req.params.id)) throw failure(404, 'Size guide not found.');
     const product = await Product.findById(req.params.id).select('+sizePhoto.data');
@@ -553,7 +571,7 @@ function createBusinessController(models = defaultModels) {
     getProfile, saveProfile, getMyProducts, getMyProduct, createProduct, updateProduct, deleteProduct,
     getWallet, purchaseCoins, boostProduct: promote('boost'), premiumProduct: promote('premium'),
     getDashboard, getRequests, respondToRequest,
-    getCatalog, getCatalogBusiness, getCatalogProduct, skipProduct, getProductImage, getProductSizeImage, getBusinessLogo
+    getCatalog, getCatalogBusiness, getCatalogProduct, skipProduct, getProductImage, getProductColourImage, getProductSizeImage, getBusinessLogo
   };
 }
 

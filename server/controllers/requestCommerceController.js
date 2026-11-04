@@ -3,6 +3,7 @@ const { singaporeToday } = require('../communityValidation');
 const wardrobeValidation = require('../services/wardrobeValidation');
 const { listedColours } = require('../services/listedColours');
 const { stockForSize, takeStock } = require('../services/sizeStock');
+const { imageFor } = require('../services/colourPhotos');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function receipt(doc) {
   return {
@@ -35,7 +36,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
     const response = await Response.findOne({ _id: req.params.responseId, requestId: req.params.id }).session(session);
     if (!response) throw fail(404, 'This suggestion does not belong to this request.');
     const product = await Product.findOne({ _id: response.productId, businessId: response.businessId, status: 'active' })
-      .select('+photo.data').session(session);
+      .select('+photo.data +colourPhotos.data').session(session);
     if (!product || product.stock < 1) throw fail(409, 'This suggested item is no longer available. Please choose another suggestion.');
     return { response, product };
   }
@@ -122,7 +123,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       // prevents further purchases, but does not pause a running video boost.
       const [item] = await Item.create([{ ...clothing, userId: req.communityActor.id, size,
         sourceProductId: String(product._id), purchaseId: String(purchaseId),
-        photo: { data: product.photo.data, contentType: product.photo.contentType },
+        photo: (({ data, contentType }) => ({ data, contentType }))(imageFor(product.colourPhotos?.find(row => row.colour === clothing.colour), product.photo)),
       }], { session });
       const [saved] = await Purchase.create([{ _id: purchaseId, requestId: request._id, responseId: response._id,
         consumerId: req.communityActor.id, businessId: product.businessId, businessName: product.businessName,

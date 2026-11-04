@@ -50,7 +50,7 @@ app.use('/api/survey', express.json({ limit: '16kb' }), surveyRoutes);
 app.use('/api/commerce', express.json({ limit: '32kb' }), commerceRoutes);
 app.use("/api/community", express.json({ limit: "8mb" }), createCommunityRouter());
 app.use("/api/style-feed", express.json({ limit: "12mb" }), styleFeedRouter);
-app.use("/api/business", express.json({ limit: "8mb" }), createBusinessRouter());
+app.use("/api/business", express.json({ limit: "16mb" }), createBusinessRouter());
 app.use("/api/catalog", express.json({ limit: "16kb" }), createCatalogRouter());
 app.use(express.json());
 

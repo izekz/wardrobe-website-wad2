@@ -14,6 +14,15 @@ const schema = new mongoose.Schema({
   // Product forms and request validation require both when creating or editing.
   colours: { type: [{ type: String, enum: COLOURS }], default: undefined },
   colour: { type: String, enum: COLOURS }, // Legacy single-colour products remain readable.
+  // One photo per colour when there are several. See services/colourPhotos.js.
+  colourPhotos: {
+    type: [new mongoose.Schema({
+      colour: { type: String, enum: COLOURS, required: true },
+      data: { type: Buffer, select: false },
+      contentType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp'], required: true }
+    }, { _id: false })],
+    default: undefined
+  },
   material: { type: String, trim: true, maxlength: 50 },
   occasions: [{ type: String, trim: true, maxlength: 40 }],
   sizes: [{ type: String, trim: true, maxlength: 20 }],

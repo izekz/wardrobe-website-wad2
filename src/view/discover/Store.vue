@@ -25,6 +25,8 @@ export default {
       const budget = Number(this.preferences.budget)
       return [...new Set([20,40,60,100,budget].filter(amount => amount <= budget))].sort((a,b)=>a-b)
     },
+    // Person 4: shoes only use US number sizes.
+    sizeOptions() { return this.filters.category === 'Shoes' ? ['5','6','7','8','9','10','11','12','13'] : ['XS','S','M','L','XL','One size'] },
     storefront() { return this.$route.query.businessId ? String(this.$route.query.businessName || 'this business') : '' },
   },
   mounted() { this.load() },
@@ -72,9 +74,9 @@ export default {
   <form class="disc-toolbar" role="search" @submit.prevent="load(1)">
     <div class="community-search"><button type="submit" aria-label="Search"><CommunityIcon name="search" :size="22"/></button><label for="discover-search" class="visually-hidden">Search items</label><input id="discover-search" v-model.trim="filters.search" type="search" maxlength="80" placeholder="Search pieces or stores…" @change="load(1)"/></div>
     <div class="community-select-wrap"><label for="discover-style" class="visually-hidden">Style</label><select id="discover-style" v-model="filters.style" class="community-select" @change="load(1)"><option value="">Style</option><option v-for="style in styleOptions" :key="style">{{style}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
-    <div class="community-select-wrap"><label for="discover-category" class="visually-hidden">Category</label><select id="discover-category" v-model="filters.category" class="community-select" @change="load(1)"><option value="">Category</option><option v-for="category in categories" :key="category">{{category}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
+    <div class="community-select-wrap"><label for="discover-category" class="visually-hidden">Category</label><select id="discover-category" v-model="filters.category" class="community-select" @change="filters.size=sizeOptions.includes(filters.size)?filters.size:'';load(1)"><option value="">Category</option><option v-for="category in categories" :key="category">{{category}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
     <div class="community-select-wrap"><label for="discover-occasion" class="visually-hidden">Occasion</label><select id="discover-occasion" v-model="filters.occasion" class="community-select" @change="load(1)"><option value="">Occasion</option><option v-for="occasion in occasionOptions" :key="occasion">{{occasion}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
-    <div class="community-select-wrap"><label for="discover-size" class="visually-hidden">Size</label><select id="discover-size" v-model="filters.size" class="community-select" @change="load(1)"><option value="">Size</option><option v-for="size in ['XS','S','M','L','XL','One size']" :key="size">{{size}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
+    <div class="community-select-wrap"><label for="discover-size" class="visually-hidden">Size</label><select id="discover-size" v-model="filters.size" class="community-select" @change="load(1)"><option value="">Size</option><option v-for="size in sizeOptions" :key="size">{{size}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
     <div class="community-select-wrap"><label for="discover-price" class="visually-hidden">Maximum price</label><select id="discover-price" v-model="filters.maxPrice" class="community-select" @change="load(1)"><option value="">Price</option><option v-for="amount in priceOptions" :key="amount" :value="String(amount)">Up to S${{amount}}</option></select><CommunityIcon name="chevron" :size="16"/></div>
   </form>
   <div class="disc-results-meta"><span>{{loading?'Finding your best matches…':`${total} ${total===1?'piece':'pieces'}`}}</span><button v-if="hasFilters" type="button" class="community-text-button" @click="resetFilters">Clear all filters</button></div>
