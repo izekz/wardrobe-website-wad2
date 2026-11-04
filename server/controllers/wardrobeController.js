@@ -50,7 +50,7 @@ function createWardrobeController(
   function productJson(doc, colour = '', size = '') {
     return {
       productId: String(doc._id), name: doc.name, category: doc.category,
-      businessId: String(doc.businessId), businessName: doc.businessName,
+      businessId: String(doc.businessId), businessName: doc.businessName, description: doc.description || '',
       style: [doc.style], material: doc.material || '', colour, size,
       availableColours: listedColours(doc), price: doc.price, source: 'store',
       ...inferSuitability({ category: doc.category, colour, material: doc.material, style: [doc.style] }),

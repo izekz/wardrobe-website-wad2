@@ -62,16 +62,20 @@ async function placePiece(piece, event) {
 async function returnPiece(piece, event) {
   togglePiece(piece);
   await nextTick();
-  const card = [...(plannerRoot.value?.querySelectorAll(".wd-picker-grid [data-piece-key]") || [])]
+  const selector = piece.source === 'store' ? '.wd-store-product-card[data-piece-key]' : '.wd-picker-grid [data-piece-key]';
+  const card = [...(plannerRoot.value?.querySelectorAll(selector) || [])]
     .find(node => node.dataset.pieceKey === pieceKey(piece));
-  (card?.querySelector(".wd-use-piece") || plannerRoot.value?.querySelector(".wd-studio-search input"))?.focus({ preventScroll: event?.detail !== 0 });
+  (card?.querySelector('.wd-store-use-piece, .wd-use-piece') || plannerRoot.value?.querySelector(".wd-studio-search input"))?.focus({ preventScroll: event?.detail !== 0 });
 }
 const pickerCategories = [{ value: "", label: "All" }, ...categories.map(value => ({ value, label: categoryName(value) }))];
 const availablePieces = computed(() => candidates.value.filter(piece =>
+  piece.source === "wardrobe" &&
   !isSelected(piece) && (!category.value || piece.category === category.value) &&
   matchesSearch([piece.name, piece.category, categoryName(piece.category), piece.colour, piece.style, piece.material], search.value),
 ));
 const chosenPieces = computed(() => candidates.value.filter(isSelected));
+const storeTrayPieces = computed(() => [...new Map([...products.value, ...unavailableStoreProducts.value]
+  .map(piece => [storeVariantKey(piece), piece])).values()]);
 const boardGroups = computed(() => {
   const dress = chosenPieces.value.some(piece => piece.category === "Dresses");
   const labels = { Tops: "Top", Bottoms: "Bottom", Dresses: "Dress", Shoes: "Shoes", Jackets: "Outerwear", Accessories: "Accessory" };
@@ -397,15 +401,33 @@ watch(() => plannerProductsState.ownerId, owner => {
       </label>
     </div>
 
-    <div v-if="!loading && (!isEditing || loadedOutfitId === editOutfitId)" class="wd-store-product-strips" aria-label="Products added from stores">
-      <div v-for="piece in products" :key="`selected-store:${storeVariantKey(piece)}`" class="wd-product-note wd-selected-store-note" role="status">
-        <div class="wd-selected-store-copy">
-          <span>Added from store: <strong>{{ piece.name }}</strong></span>
-          <span class="wd-selected-store-details">{{ piece.businessName || 'Store pick' }} · S${{ Number(piece.price).toFixed(2) }}<template v-if="piece.colour"> · {{ piece.colour }}</template><template v-if="piece.size"> · Size {{ piece.size }}</template></span>
-        </div>
-        <button type="button" class="wd-remove-store" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || busy || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="15" />Remove from planner</button>
-      </div>
-    </div>
+    <section v-if="storeTrayPieces.length && !loading && (!isEditing || loadedOutfitId === editOutfitId)" class="wd-store-product-tray" aria-labelledby="wd-store-products-title">
+      <header class="wd-store-tray-heading">
+        <h2 id="wd-store-products-title">Added from stores <span>{{ storeTrayPieces.length }}</span></h2>
+        <p>Use a store piece alongside your wardrobe.</p>
+      </header>
+      <ul class="wd-store-product-scroll" tabindex="0" aria-label="Store products — scroll horizontally">
+        <li v-for="piece in storeTrayPieces" :key="storeVariantKey(piece)" class="wd-store-product-card" :class="{ 'is-selected': isSelected(piece), 'is-unavailable': piece.missing }" :data-piece-key="pieceKey(piece)">
+          <div class="wd-store-product-content">
+            <div class="wd-store-product-photo">
+              <img v-if="!piece.missing && piece.imageURL && !failedPhotos[photoKey(piece)]" :src="piece.imageURL" :alt="piece.name" loading="lazy" @error="failedPhotos[photoKey(piece)] = true" />
+              <span v-else><CommunityIcon name="hanger" :size="23" /><small>Photo unavailable</small></span>
+            </div>
+            <div class="wd-store-product-copy">
+              <h3 :title="piece.name">{{ piece.name }}</h3>
+              <p v-if="piece.businessName" class="wd-store-product-business">{{ piece.businessName }}</p>
+              <p class="wd-store-product-options"><span v-if="Number.isFinite(piece.price)">S${{ piece.price.toFixed(2) }}</span><span v-if="piece.colour">{{ piece.colour }}</span><span v-if="piece.size">Size {{ piece.size }}</span></p>
+              <p v-if="piece.missing" class="wd-store-product-unavailable">No longer available</p>
+              <p v-else-if="piece.description" class="wd-store-product-description" :title="piece.description">{{ piece.description }}</p>
+            </div>
+          </div>
+          <div class="wd-store-product-actions">
+            <button type="button" class="wd-store-use-piece" :class="{ 'is-selected': isSelected(piece) }" :aria-label="`${isSelected(piece) ? 'Remove from outfit' : 'Use this piece'}: ${piece.name}`" :aria-pressed="isSelected(piece)" :disabled="saving || busy || piece.missing || plannerProductsState.pending > 0" @click="togglePiece(piece)"><CommunityIcon :name="isSelected(piece) ? 'close' : 'plus'" :size="14" />{{ isSelected(piece) ? 'Remove from outfit' : 'Use this piece' }}</button>
+            <button type="button" class="wd-remove-store" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || busy || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="14" />Remove from planner</button>
+          </div>
+        </li>
+      </ul>
+    </section>
 
     <nav class="wd-mobile-steps" aria-label="Planner sections">
       <a href="#wd-picker-title">Choose pieces</a>
@@ -419,10 +441,6 @@ watch(() => plannerProductsState.ownerId, owner => {
     <p v-for="message in editNotices" :key="message" class="wd-weather-note" role="status">{{ message }}</p>
     <p v-if="loading || busy" role="status" class="wd-studio-loading">Finding recommendations for your wardrobe…</p>
     <template v-else-if="!isEditing || loadedOutfitId === editOutfitId">
-      <div v-for="piece in unavailableStoreProducts" :key="storeVariantKey(piece)" class="wd-weather-note" role="status">
-        {{ piece.name }}{{ piece.colour ? ` · ${piece.colour}` : '' }}{{ piece.size ? ` · Size ${piece.size}` : '' }} is no longer available.
-        <button type="button" class="wd-remove-store" :disabled="saving || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="14" /> Remove from planner</button>
-      </div>
       <div v-if="!candidates.length" class="wd-empty">
         <span>✿</span>
         <h2>Your next outfit starts with a few pieces</h2>
@@ -458,18 +476,17 @@ watch(() => plannerProductsState.ownerId, owner => {
                 </div>
               </template>
               <p class="wd-item-style">{{ piece.style?.join(" · ") || "Style not tagged" }}</p>
-              <p v-if="piece.source === 'store'" class="wd-source-caption">{{ piece.businessName || 'Store pick' }} · S${{ Number(piece.price).toFixed(2) }}<span v-if="piece.size"> · Size {{ piece.size }}</span></p>
               <button type="button" class="wd-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving" @click="placePiece(piece, $event)">
                 <CommunityIcon name="plus" :size="16" />Use this piece
               </button>
-              <button v-if="piece.source === 'store'" type="button" class="wd-remove-store wd-remove-planner-product" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="13" />Remove from planner</button>
             </ClothingCard>
           </TransitionGroup>
           <div v-else class="wd-studio-picker-empty">
             <CommunityIcon name="hanger" :size="32" />
-            <h3>{{ search || category ? 'No matching pieces' : 'Your pieces are on the board' }}</h3>
-            <p>{{ search || category ? 'Try a different search or category.' : 'Remove a piece from your outfit board to choose it again.' }}</p>
+            <h3>{{ search || category ? 'No matching pieces' : !items.length ? 'Your wardrobe is empty' : 'Your wardrobe pieces are on the board' }}</h3>
+            <p>{{ search || category ? 'Try a different search or category.' : !items.length ? 'Add your own clothes to mix with store pieces.' : 'Remove a wardrobe piece from your outfit board to choose it again.' }}</p>
             <button v-if="search || category" type="button" class="wd-link" @click="search = ''; category = ''">Clear filters</button>
+            <RouterLink v-else-if="!items.length" class="wd-link" :to="{ name: 'wardrobe-new' }">Add clothing</RouterLink>
           </div>
           <a v-if="chosenCount" class="wd-mobile-board-link" href="#wd-board-title">View outfit board · {{ chosenCount }} selected<CommunityIcon name="arrow" :size="16" /></a>
         </section>
