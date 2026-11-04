@@ -15,6 +15,22 @@ export function createAuthGuard(restoreSession, onError = () => {}) {
         user.role === 'consumer' && !user.surveyCompleted ? 'style-survey' : 'discover'
         return { name, replace: true }
       }
+      const allowedRoles = to.meta.roles
+
+      if (
+        Array.isArray(allowedRoles) &&
+        !allowedRoles.includes(user.role)
+      ) {
+        const name = user.role === 'admin'
+          ? 'admin-dashboard'
+          : user.role === 'business'
+            ? 'business-dashboard'
+            : user.role === 'consumer' && !user.surveyCompleted
+              ? 'style-survey'
+              : 'discover'
+
+        return { name, replace: true }
+      }
       // Business accounts stay inside the business portal: any customer page
       // (Discover, cart, wardrobe, customer Style Feed, customer profile...) sends them home.
       if (user.role === 'business' && to.meta.businessLayout !== true) {

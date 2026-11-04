@@ -1,23 +1,67 @@
+import { authState } from './authService'
+
 async function request(path, options = {}) {
-  const response = await fetch(`/api/admin${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000)
 
-  const data = await response.json().catch(() => null)
+  try {
+    let response
 
-  if (!response.ok) {
-    throw new Error(data?.message || 'Unable to complete the request.')
+    try {
+      response = await fetch(`/api/admin${path}`, {
+        ...options,
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (error.name === 'AbortError') throw error
+
+      throw new Error(
+        'Cannot connect to the server. Check your connection and try again.'
+      )
+    }
+
+    const data = await response.json().catch(() => null)
+
+    if (response.status === 401) {
+      authState.user = null
+      window.dispatchEvent(new Event('auth:expired'))
+    }
+
+    if (!response.ok) {
+      const error = new Error(
+        data?.message ||
+        'Unable to complete the request. Please try again.'
+      )
+
+      error.status = response.status
+      error.code = data?.code
+      throw error
+    }
+
+    if (!data || typeof data !== 'object') {
+      throw new Error(
+        'The server returned an unexpected response. Refresh to check the result.'
+      )
+    }
+
+    return data
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        'The request timed out. Refresh to check whether it completed before trying again.'
+      )
+    }
+
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
-
-  if (!data) {
-    throw new Error('The server returned an unexpected response.')
-  }
-
-  return data
 }
 
 export async function getUsers() {
@@ -55,6 +99,12 @@ export function deleteListing(id) {
 
 export function deleteOutfitRequest(id) {
   return request(`/requests/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function deleteOutfitVideo(id) {
+  return request(`/videos/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }

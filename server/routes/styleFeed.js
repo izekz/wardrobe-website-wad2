@@ -187,6 +187,46 @@ router.post('/', requireBusiness, trustedBrowser, async (req, res) => {
   res.status(201).json({ video: publicVideo(video, product, business, req.user.id) });
 });
 
+// Open a specific video from a report or shared link.
+router.get('/:id', async (req, res) => {
+  if (!objectId(req.params.id)) {
+    return res.status(404).json({
+      message: 'Video not found.',
+    });
+  }
+
+  const video = await StyleVideo.findById(req.params.id)
+    .select('+likesBy');
+
+  if (!video) {
+    return res.status(404).json({
+      message: 'This video has been deleted or is no longer available.',
+    });
+  }
+
+  const product = objectId(video.productId)
+    ? await Product.findById(video.productId)
+    : null;
+
+  // Admins can inspect reported videos even if their product was removed.
+  if (
+    req.user.role !== 'admin' &&
+    (!product || product.status !== 'active')
+  ) {
+    return res.status(404).json({
+      message: 'This video is no longer available.',
+    });
+  }
+
+  const business = objectId(video.businessId)
+    ? await Business.findById(video.businessId)
+    : null;
+
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    video: publicVideo(video, product, business, req.user.id),
+  });
+});
 // Range requests are needed for HTML5 video seeking and autoplay on many browsers.
 router.get('/:id/video', async (req, res) => {
   if (!objectId(req.params.id)) return res.sendStatus(404);
@@ -256,6 +296,13 @@ router.post('/:id/like', trustedBrowser, async (req, res) => {
 });
 
 router.post('/:id/event', trustedBrowser, async (req, res) => {
+  // Admin moderation must not inflate business viewing statistics.
+  if (req.user.role === 'admin') {
+    return res.json({
+      counted: false,
+      moderationVisit: true,
+    });
+  }
   if (!objectId(req.params.id)) throw error(404, 'Video not found.');
   const type = req.body?.type;
   const field = { view: 'views', product: 'productClicks', store: 'storeClicks', impression: 'sponsoredImpressions' }[type];

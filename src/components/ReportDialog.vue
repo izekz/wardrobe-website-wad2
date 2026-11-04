@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { createReport } from '../services/reportService'
 
 const props = defineProps({
@@ -14,7 +14,7 @@ const props = defineProps({
   targetType: {
     type: String,
     required: true,
-    validator: value => ['listing', 'request'].includes(value),
+    validator: value => ['listing', 'request', 'video'].includes(value),
   },
 })
 
@@ -26,6 +26,8 @@ const explanation = ref('')
 const busy = ref(false)
 const error = ref('')
 const submitted = ref(false)
+const alreadyReported = ref(false)
+let disposed = false
 
 const reasons = [
   'Misleading information',
@@ -37,6 +39,19 @@ const reasons = [
 onMounted(() => {
   dialog.value.showModal()
 })
+
+onBeforeUnmount(() => {
+  disposed = true
+  dialog.value?.close()
+})
+
+watch(
+  () => [props.listingId, props.targetType],
+  () => {
+    dialog.value?.close()
+    emit('close')
+  }
+)
 
 function close() {
   if (!busy.value) emit('close')
@@ -67,12 +82,21 @@ async function submit() {
       explanation: explanation.value.trim(),
     })
 
+    if (disposed) return
+
     submitted.value = true
     emit('submitted')
   } catch (err) {
-    error.value = err.message || 'Unable to submit your report.'
+    if (disposed) return
+
+    if (err.status === 409) {
+      alreadyReported.value = true
+      submitted.value = true
+    } else {
+      error.value = err.message || 'Unable to submit your report.'
+    }
   } finally {
-    busy.value = false
+    if (!disposed) busy.value = false
   }
 }
 </script>
@@ -87,7 +111,13 @@ async function submit() {
   >
     <header class="dialog-header">
       <h2 id="report-title">
-        {{ submitted ? 'Report submitted' : 'Report post' }}
+        {{
+          alreadyReported
+            ? 'Already reported'
+            : submitted
+              ? 'Report submitted'
+              : 'Report post'
+        }}
       </h2>
 
       <button
@@ -103,7 +133,11 @@ async function submit() {
 
     <template v-if="submitted">
       <p id="report-confirmation" role="status">
-        Thank you for reporting this post. An administrator will review it.
+        {{
+          alreadyReported
+            ? 'You have already reported this post. No duplicate report was created.'
+            : 'Thank you. Your report has been submitted for administrator review.'
+        }}
       </p>
 
       <div class="dialog-actions">

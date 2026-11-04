@@ -1,17 +1,22 @@
 const express = require('express')
-const { requireAuth } = require('../middleware/authentication')
-const { trustedBrowser } = require('../middleware/authentication')
+const {
+  requireAuth,
+  trustedBrowser,
+} = require('../middleware/authentication')
 const { requireAdmin } = require('../middleware/admin')
+
 const {
   getUsers,
   updateUserStatus,
   getListings,
   deleteListing,
   deleteOutfitRequest,
+  deleteOutfitVideo,
 } = require('../controllers/adminController')
 
 const router = express.Router()
 
+// Every route below requires a signed-in administrator.
 router.use(requireAuth, requireAdmin)
 
 router.get('/users', getUsers)
@@ -35,6 +40,12 @@ router.delete(
   '/requests/:id',
   trustedBrowser,
   deleteOutfitRequest
+)
+
+router.delete(
+  '/videos/:id',
+  trustedBrowser,
+  deleteOutfitVideo
 )
 
 module.exports = router

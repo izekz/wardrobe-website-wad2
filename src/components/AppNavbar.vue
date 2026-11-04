@@ -63,7 +63,7 @@ export default {
     :to="{ name: 'admin-reports' }"
     :class="{ 'is-current': $route.name === 'admin-reports' }"
   >
-    Requests
+    Reports
   </RouterLink>
 </nav>
 

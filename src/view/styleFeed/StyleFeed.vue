@@ -1,13 +1,15 @@
 <script>
 import { styleFeedApi } from '../../services/styleFeedApi'
 import { authState } from '../../services/authService'
+import ReportDialog from '../../components/ReportDialog.vue'
 import '../../assets/styles/styleFeed.css'
 
 export default {
-  data() {
+  components: { ReportDialog },
+    data() {
     return {
-      videos: [], activeIndex: 0, loading: true, error: '', interactionError: '',
-      likedBusy: '', muted: true, lastImpressedPost: null, playbackProgress: {}, observedPlayback: {},
+      videos: [], activeIndex: 0, loading: true, error: '', interactionError: '', reportTarget: null,
+      likedBusy: '', muted: true, lastImpressedPost: null, playbackProgress: {}, observedPlayback: {}, loadVersion: 0,
       // Native trackpad/wheel scrolling is never locked. Remember when the
       // final card was reached so only a NEW downward gesture loops it.
       scrollSettleTimer: null, lastWheelAt: 0, bottomReachedAt: 0,
@@ -19,47 +21,130 @@ export default {
     activePost() { return this.videos[this.activeIndex] || null },
     activeId() { return this.activePost?.videoId || null },
   },
+  watch: {
+    '$route.query.videoId'() {
+      this.reportTarget = null
+      this.load()
+    },
+  },
   mounted() {
     window.addEventListener('keydown', this.onKeydown)
     this.load()
   },
   beforeUnmount() {
+    this.loadVersion++
     window.removeEventListener('keydown', this.onKeydown)
     if (this.scrollSettleTimer !== null) clearTimeout(this.scrollSettleTimer)
     this.$refs.feedViewer?.querySelectorAll('video').forEach(video => video.pause())
   },
   methods: {
+    openReport(post) {
+      this.reportTarget = {
+        id: post.videoId,
+        title: post.caption || `Outfit video by ${post.businessName}`,
+      }
+
+      this.$refs.feedViewer?.querySelectorAll('video')
+        .forEach(video => video.pause())
+    },
+
+    closeReport() {
+      this.reportTarget = null
+      this.$nextTick(() => this.playActive())
+    },
     formatMoney(value) { return `S$${Number(value || 0).toFixed(2)}` },
     async load() {
-      this.loading = true; this.error = ''; this.interactionError = ''
+      const version = ++this.loadVersion
+
+      this.$refs.feedViewer?.querySelectorAll('video')
+        .forEach(video => video.pause())
+
+      this.loading = true
+      this.error = ''
+      this.interactionError = ''
+
       try {
-        // sessionStorage survives refresh but is cleared when the tab is closed.
-        // Requesting a different opener avoids an identical first video where possible.
+        const requestedId = this.$route.query.videoId
         const lastKey = 'dripped:style-feed:first-video'
-        let previousFirst = ''
-        try { previousFirst = sessionStorage.getItem(lastKey) || '' } catch { /* storage disabled */ }
-        const data = await styleFeedApi(previousFirst ? `?avoidFirst=${encodeURIComponent(previousFirst)}` : '')
-        this.videos = data.videos
+        let videos
+
+        if (requestedId !== undefined) {
+          if (
+            typeof requestedId !== 'string' ||
+            !/^[a-fA-F0-9]{24}$/.test(requestedId)
+          ) {
+            throw new Error('This video link is invalid.')
+          }
+
+          const result = await styleFeedApi(
+            `/${encodeURIComponent(requestedId)}`
+          )
+
+          videos = [result.video]
+        } else {
+          let previousFirst = ''
+
+          try {
+            previousFirst = sessionStorage.getItem(lastKey) || ''
+          } catch {
+            // Continue normally when browser storage is unavailable.
+          }
+
+          const result = await styleFeedApi(
+            previousFirst
+              ? `?avoidFirst=${encodeURIComponent(previousFirst)}`
+              : ''
+          )
+
+          videos = result.videos
+        }
+
+        if (version !== this.loadVersion) return
+
+        this.videos = videos
         this.activeIndex = 0
         this.lastImpressedPost = null
         this.playbackProgress = {}
         this.observedPlayback = {}
         this.lastWheelAt = 0
         this.bottomReachedAt = 0
-        try {
-          if (this.activeId) sessionStorage.setItem(lastKey, this.activeId)
-        } catch { /* storage disabled */ }
+
+        if (requestedId === undefined) {
+          try {
+            if (this.activeId) {
+              sessionStorage.setItem(lastKey, this.activeId)
+            }
+          } catch {
+            // Continue normally when browser storage is unavailable.
+          }
+        }
+
         this.loading = false
         await this.$nextTick()
-        if (this.$refs.feedViewer) this.$refs.feedViewer.scrollTop = 0
+
+        if (version !== this.loadVersion) return
+
+        if (this.$refs.feedViewer) {
+          this.$refs.feedViewer.scrollTop = 0
+        }
+
         this.playActive()
-      } catch (error) { this.error = error.message }
-      finally { this.loading = false }
+      } catch (error) {
+        if (version === this.loadVersion) {
+          this.videos = []
+          this.error = error.message
+        }
+      } finally {
+        if (version === this.loadVersion) {
+          this.loading = false
+        }
+      }
     },
     videoAt(index) {
       return this.$refs.feedViewer?.querySelector(`video[data-feed-index="${index}"]`) || null
     },
     playActive() {
+      if (this.reportTarget) return
       const post = this.activePost
       const viewer = this.$refs.feedViewer
       if (!post || !viewer) return
@@ -99,6 +184,7 @@ export default {
       })
     },
     onKeydown(event) {
+      if (this.reportTarget) return
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey ||
           !['ArrowDown', 'ArrowUp'].includes(event.key) ||
           event.target?.closest?.('input, textarea, select, [contenteditable], [role="dialog"]')) return
@@ -299,6 +385,27 @@ export default {
             <button class="sf-sound" type="button" :aria-label="muted ? 'Unmute video' : 'Mute video'" @click="toggleMute">{{ muted ? '🔇' : '🔊' }}</button>
             <div class="sf-video-caption"><strong>{{ post.businessName }}</strong><p>{{ post.caption }}</p></div>
             <div class="sf-video-actions">
+              <button
+                type="button"
+                title="Report video"
+                :aria-label="`Report outfit video by ${post.businessName}`"
+                @click="openReport(post)"
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 21V3m0 1c5-4 9 4 14 0v10c-5 4-9-4-14 0"/>
+                </svg>
+                <small>Report</small>
+              </button>
               <button type="button" :disabled="likedBusy === post.videoId" :aria-label="post.liked ? 'Unlike' : 'Like'" :aria-pressed="post.liked" @click="toggleLike(post)"><span>{{ post.liked ? '♥' : '♡' }}</span><small>{{ post.likes }}</small></button>
               <span class="sf-view-count" :aria-label="`${post.views || 0} video views`"><span aria-hidden="true">▶</span><small>{{ post.views || 0 }}</small></span>
             </div>
@@ -329,5 +436,13 @@ export default {
       </div>
       <p v-if="interactionError" class="sf-error" role="alert">{{ interactionError }}</p>
     </template>
+
+    <ReportDialog
+      v-if="reportTarget"
+      :listing-id="reportTarget.id"
+      :listing-name="reportTarget.title"
+      target-type="video"
+      @close="closeReport"
+    />
   </section>
 </template>

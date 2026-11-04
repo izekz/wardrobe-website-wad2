@@ -201,14 +201,42 @@ function createBusinessController(models = defaultModels) {
   async function deleteProduct(req, res) {
     const business = await myBusiness(req);
     const product = await myProduct(req, business);
-    if (StyleVideo) {
-      const videos = await StyleVideo.find({ productId: String(product._id), boostedUntil: { $ne: null } });
-      if (videos.some(video => remainingBoostMs(video) > 0)) {
-        throw failure(409, 'This product has unused paid Style Feed promotion time. Hide it instead of deleting it.');
+
+    const result = await Product.db.transaction(async session => {
+      const current = await Product.findOne({
+        _id: product._id,
+        businessId: String(business._id)
+      }).session(session);
+
+      if (!current) throw failure(404, 'Product not found or already deleted.');
+
+      if (StyleVideo) {
+        const videos = await StyleVideo.find({
+          productId: String(current._id),
+          boostedUntil: { $ne: null }
+        }).session(session);
+
+        if (videos.some(video => remainingBoostMs(video) > 0)) {
+          throw failure(409, 'This product has unused paid Style Feed promotion time. Hide it instead of deleting it.');
+        }
       }
-    }
-    await Product.deleteOne({ _id: product._id });
-    res.json({ message: 'Product deleted.' });
+
+      const deletedVideos = StyleVideo
+        ? await StyleVideo.deleteMany(
+            { productId: String(current._id) },
+            { session }
+          )
+        : { deletedCount: 0 };
+
+      await Product.deleteOne({ _id: current._id }, { session });
+
+      return { deletedVideoCount: deletedVideos.deletedCount };
+    });
+
+    res.json({
+      message: 'Product and its linked Style Feed videos deleted.',
+      ...result
+    });
   }
 
   // ---------- Coins ----------
@@ -501,10 +529,19 @@ function createBusinessController(models = defaultModels) {
     if (!idIsValid(req.params.id)) throw failure(404, 'Product not found.');
     const product = await Product.findOne({ _id: req.params.id, status: 'active' });
     if (!product) throw failure(404, 'Product not found.');
-    // Each shopper visit to the detail page counts as one view on the dashboard.
-    const owner = await Business.findOne({ _id: product.businessId, ownerId: req.user.id });
-    if (!owner) {
-      await Product.updateOne({ _id: product._id }, { $inc: { views: 1 } });
+    // Admin moderation visits and the business owner's visits
+    // do not count as customer product views.
+    const owner = await Business.findOne({
+      _id: product.businessId,
+      ownerId: req.user.id,
+    });
+
+    if (!owner && req.user.role !== 'admin') {
+      await Product.updateOne(
+        { _id: product._id },
+        { $inc: { views: 1 } }
+      );
+
       product.views += 1;
     }
     const business = await Business.findById(product.businessId);

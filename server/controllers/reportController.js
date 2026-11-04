@@ -2,6 +2,7 @@ const Report = require('../models/Report')
 const Product = require('../models/Product')
 const OutfitRequest = require('../models/OutfitRequest')
 const Business = require('../models/Business')
+const StyleVideo = require('../models/StyleVideo')
 
 const reasons = [
   'Misleading information',
@@ -30,7 +31,81 @@ function reportJson(report) {
     reviewedAt: report.reviewedAt,
   }
 }
+async function reportsWithTargetState(reports) {
+  const idsFor = type => reports
+    .filter(report => report.targetType === type)
+    .map(report => report.listingId)
 
+  const listingIds = idsFor('listing')
+  const requestIds = idsFor('request')
+  const videoIds = idsFor('video')
+
+  const [products, requests, videos] = await Promise.all([
+    listingIds.length
+      ? Product.find({ _id: { $in: listingIds } })
+        .select('_id status')
+        .lean()
+      : [],
+
+    requestIds.length
+      ? OutfitRequest.find({ _id: { $in: requestIds } })
+        .select('_id deletedAt')
+        .lean()
+      : [],
+
+    videoIds.length
+      ? StyleVideo.find({ _id: { $in: videoIds } })
+        .select('_id')
+        .lean()
+      : [],
+  ])
+
+  const productsById = new Map(
+    products.map(product => [String(product._id), product])
+  )
+
+  const requestsById = new Map(
+    requests.map(request => [String(request._id), request])
+  )
+
+  const videoIdsFound = new Set(
+    videos.map(video => String(video._id))
+  )
+
+  return reports.map(report => {
+    const id = String(report.listingId)
+    let targetState = 'removed'
+
+    if (report.targetType === 'listing') {
+      const product = productsById.get(id)
+
+      if (product) {
+        targetState = product.status === 'active'
+          ? 'available'
+          : 'hidden'
+      }
+    } else if (report.targetType === 'request') {
+      const request = requestsById.get(id)
+
+      if (request && !request.deletedAt) {
+        targetState = 'available'
+      }
+    } else if (
+      report.targetType === 'video' &&
+      videoIdsFound.has(id)
+    ) {
+      // The admin video endpoint supports inspection even when
+      // the video’s linked product has been hidden or deleted.
+      targetState = 'available'
+    }
+
+    return {
+      ...reportJson(report),
+      targetState,
+      canView: targetState === 'available',
+    }
+  })
+}
 async function createReport(req, res, next) {
   try {
     const {
@@ -42,7 +117,7 @@ async function createReport(req, res, next) {
 
     if (
       !validId(listingId) ||
-      !['listing', 'request'].includes(targetType) ||
+      !['listing', 'request', 'video'].includes(targetType) ||
       !reasons.includes(reason) ||
       typeof explanation !== 'string' ||
       explanation.trim().length > 1000
@@ -80,7 +155,7 @@ async function createReport(req, res, next) {
         ownerId = business?.ownerId
         targetName = target.name
       }
-    } else {
+    } else if (targetType === 'request') {
       target = await OutfitRequest.findOne({
         _id: listingId,
         deletedAt: null,
@@ -90,6 +165,34 @@ async function createReport(req, res, next) {
 
       ownerId = target?.consumerId
       targetName = target?.title
+    } else if (targetType === 'video') {
+      target = await StyleVideo.findById(listingId)
+        .select('caption businessId productId')
+        .lean()
+
+      if (target) {
+        const product = validId(target.productId)
+          ? await Product.findOne({
+              _id: target.productId,
+              status: 'active',
+            })
+              .select('name')
+              .lean()
+          : null
+
+        if (!product) {
+          target = null
+        } else {
+          const business = validId(target.businessId)
+            ? await Business.findById(target.businessId)
+              .select('ownerId')
+              .lean()
+            : null
+
+          ownerId = business?.ownerId
+          targetName = target.caption || product.name
+        }
+      }
     }
 
     if (!target) {
@@ -135,7 +238,7 @@ async function getReports(req, res, next) {
 
     if (
       targetType !== undefined &&
-      !['listing', 'request'].includes(targetType)
+      !['listing', 'request', 'video'].includes(targetType)
     ) {
       return res.status(400).json({
         message: 'Invalid report type.',
@@ -144,14 +247,16 @@ async function getReports(req, res, next) {
 
     const filter = targetType
       ? { targetType }
-      : { targetType: { $in: ['listing', 'request'] } }
+      : { targetType: { $in: ['listing', 'request', 'video'] } }
 
     const reports = await Report.find(filter)
       .sort({ createdAt: -1 })
       .lean()
 
+    const results = await reportsWithTargetState(reports)
+    res.set('Cache-Control', 'no-store')
     res.json({
-      reports: reports.map(reportJson),
+      reports: results,
     })
   } catch (error) {
     next(error)
@@ -177,7 +282,7 @@ async function reviewReport(req, res, next) {
     const report = await Report.findOneAndUpdate(
       {
         _id: req.params.id,
-        targetType: { $in: ['listing', 'request'] },
+        targetType: { $in: ['listing', 'request', 'video'] },
         status: 'pending',
       },
       {
@@ -200,8 +305,11 @@ async function reviewReport(req, res, next) {
       })
     }
 
+    const [result] = await reportsWithTargetState([report])
+
+    res.set('Cache-Control', 'no-store')
     res.json({
-      report: reportJson(report),
+      report: result,
     })
   } catch (error) {
     next(error)

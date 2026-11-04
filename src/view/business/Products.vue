@@ -76,8 +76,8 @@ export default {
         status === 'hidden' ? `“${name}” is hidden from the store.` : `“${name}” is showing in the store again.`)
     },
     remove(product) {
-      return this.act(product, 'delete', `Delete “${product.name}”? This cannot be undone.`,
-        () => businessApi(`/products/${product.productId}`, { method: 'DELETE' }), `“${product.name}” was deleted.`)
+      return this.act(product, 'delete', `Delete “${product.name}” and all its linked Style Feed videos? This cannot be undone.`,
+        () => businessApi(`/products/${product.productId}`, { method: 'DELETE' }), `“${product.name}” and its linked Style Feed videos were deleted.`)
     },
   },
 }

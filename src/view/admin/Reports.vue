@@ -3,30 +3,56 @@ import {
   getReports,
   reviewReport,
 } from '../../services/reportService'
-import { deleteOutfitRequest } from '../../services/adminService'
+
+import {
+  deleteOutfitRequest,
+  deleteOutfitVideo,
+} from '../../services/adminService'
 
 export default {
   data() {
     return {
       reports: [],
       filter: 'pending',
+      typeFilter: 'all',
       loading: true,
+      fetching: false,
       saving: false,
       removing: false,
-      removedRequestIds: [],
+      loadError: '',
       error: '',
       message: '',
       selected: null,
       reviewNote: '',
+      drafts: {},
+      hasLoaded: false,
+      handledReportLink: '',
     }
   },
 
   computed: {
+    busy() {
+      return this.fetching || this.saving || this.removing
+    },
+
     filteredReports() {
       return this.reports.filter(report =>
-        this.filter === 'all' ||
-        report.status === this.filter
+        (this.filter === 'all' || report.status === this.filter) &&
+        (this.typeFilter === 'all' ||
+          report.targetType === this.typeFilter)
       )
+    },
+
+    removalLabel() {
+      return this.selected?.targetType === 'video'
+        ? 'Delete video'
+        : 'Remove request'
+    },
+  },
+
+  watch: {
+    '$route.query.reportId'() {
+      this.openLinkedReport()
     },
   },
 
@@ -35,91 +61,266 @@ export default {
   },
 
   methods: {
+    openLinkedReport() {
+      const id = this.$route.query.reportId
+
+      if (id === undefined) {
+        this.handledReportLink = ''
+        return
+      }
+
+      // A link can arrive before loading finishes or while saving.
+      // The completion handlers retry using the latest route.
+      if (this.busy || !this.hasLoaded) return
+      if (typeof id === 'string' && id === this.handledReportLink) return
+
+      if (typeof id !== 'string' || !/^[a-fA-F0-9]{24}$/.test(id)) {
+        this.error = 'This report link is invalid.'
+        return
+      }
+
+      const report = this.reports.find(
+        item => item.id.toLowerCase() === id.toLowerCase()
+      )
+
+      if (!report) {
+        this.selected = null
+        this.reviewNote = ''
+        this.error = 'This report could not be found. Refresh to check the latest reports.'
+        return
+      }
+
+      this.handledReportLink = id
+      this.filter = report.status
+      this.typeFilter = report.targetType
+      this.selectReport(report)
+    },
+
+    reportTypeLabel(type) {
+      return {
+        listing: 'Business listing',
+        request: 'Outfit request',
+        video: 'Outfit video',
+      }[type] || 'Post'
+    },
+
+    statusLabel(status) {
+      return {
+        pending: 'Pending review',
+        resolved: 'Resolved',
+        dismissed: 'Dismissed',
+      }[status] || status
+    },
+
+    reportRoute(report) {
+      if (report.targetType === 'request') {
+        return {
+          name: 'community-request',
+          params: { requestId: report.listingId },
+        }
+      }
+
+      if (report.targetType === 'video') {
+        return {
+          name: 'style-feed',
+          query: { videoId: report.listingId },
+        }
+      }
+
+      return {
+        name: 'discover-product',
+        params: { productId: report.listingId },
+      }
+    },
+
+    formatDate(value) {
+      if (!value) return '—'
+
+      return new Date(value).toLocaleString('en-SG', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    },
+
+    rememberDraft() {
+      if (this.selected?.status === 'pending') {
+        this.drafts[this.selected.id] = this.reviewNote
+      }
+    },
+
     async loadReports() {
+      if (this.busy) return
+
+      this.rememberDraft()
+      this.fetching = true
       this.loading = true
-      this.error = ''
-      this.selected = null
+      this.loadError = ''
 
       try {
-        const data = await getReports('request')
+        const data = await getReports()
         this.reports = data.reports
+        this.hasLoaded = true
+
+        if (this.selected) {
+          const updated = this.reports.find(
+            report => report.id === this.selected.id
+          )
+
+          this.selected = updated || null
+          this.reviewNote = updated
+            ? updated.status === 'pending'
+              ? this.drafts[updated.id] ?? updated.reviewNote ?? ''
+              : updated.reviewNote || ''
+            : ''
+        }
       } catch (error) {
-        this.error = error.message
+        this.loadError = this.reports.length
+          ? 'Could not refresh reports. The displayed information may be out of date.'
+          : error.message || 'Unable to load reports.'
       } finally {
         this.loading = false
+        this.fetching = false
+        this.openLinkedReport()
       }
     },
 
     selectReport(report) {
-      if (this.saving || this.removing) return
+      if (this.busy) return
+
+      this.rememberDraft()
       this.selected = report
-      this.reviewNote = report.reviewNote || ''
+      this.reviewNote = report.status === 'pending'
+        ? this.drafts[report.id] ?? report.reviewNote ?? ''
+        : report.reviewNote || ''
+
       this.error = ''
       this.message = ''
+
+      this.$nextTick(() => {
+        this.$refs.reviewPanel?.focus()
+        this.$refs.reviewPanel?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+      })
     },
 
-    formatDate(date) {
-      return new Date(date).toLocaleDateString('en-SG')
-    },
+    async removePost() {
+      if (
+        this.busy ||
+        !this.selected ||
+        !['request', 'video'].includes(this.selected.targetType) ||
+        this.selected.targetState === 'removed'
+      ) return
 
-    async removeRequest() {
-      if (this.saving || this.removing || !this.selected) return
+      const reportId = this.selected.id
+      const targetId = this.selected.listingId
+      const targetType = this.selected.targetType
+      const targetName = this.selected.listingName
+      const isVideo = targetType === 'video'
 
-      const requestId = this.selected.listingId
-      const requestName = this.selected.listingName
+      const warning = isVideo
+        ? `Delete video "${targetName}"? This permanently deletes the video. Its linked product and report history will remain.`
+        : `Remove request "${targetName}"? It will no longer appear on the request pages. Its report history will remain.`
 
-      if (this.removedRequestIds.includes(requestId)) return
-
-      if (!window.confirm(
-        `Remove "${requestName}"? It will no longer appear on the request pages.`
-      )) return
+      if (!window.confirm(warning)) return
 
       this.removing = true
       this.error = ''
       this.message = ''
 
       try {
-        await deleteOutfitRequest(requestId)
-        this.removedRequestIds.push(requestId)
+        let alreadyRemoved = false
 
-        this.message =
-          'Request removed. Add a review note and resolve the report when ready.'
+        try {
+          if (isVideo) {
+            await deleteOutfitVideo(targetId)
+          } else {
+            await deleteOutfitRequest(targetId)
+          }
+        } catch (error) {
+          if (error.status !== 404) throw error
+          alreadyRemoved = true
+        }
+
+        this.reports = this.reports.map(report =>
+          report.targetType === targetType &&
+          report.listingId === targetId
+            ? {
+                ...report,
+                targetState: 'removed',
+                canView: false,
+              }
+            : report
+        )
+
+        this.selected = this.reports.find(
+          report => report.id === reportId
+        ) || null
+
+        const label = isVideo ? 'Video' : 'Request'
+
+        this.message = alreadyRemoved
+          ? `${label} was already removed. You can still review and close its report.`
+          : this.selected?.status === 'pending'
+            ? `${label} removed. Record your action below, then mark the report resolved.`
+            : `${label} removed. The existing report decision has been preserved.`
       } catch (error) {
-        this.error = error.message || 'Unable to remove the request.'
+        this.error = error.message || 'Unable to remove this post.'
       } finally {
         this.removing = false
+        this.openLinkedReport()
       }
     },
 
     async submitReview(status) {
-      if (this.saving || this.removing || !this.selected) return
+      if (
+        this.busy ||
+        !this.selected ||
+        this.selected.status !== 'pending' ||
+        !['resolved', 'dismissed'].includes(status)
+      ) return
 
-      if (!this.reviewNote.trim()) {
-        this.error = 'Enter a note explaining your decision.'
+      const note = this.reviewNote.trim()
+
+      if (!note) {
+        this.error = 'Enter a decision reason before closing this report.'
+        document.getElementById('review-note')?.focus()
         return
       }
+
+      const reportId = this.selected.id
 
       this.saving = true
       this.error = ''
       this.message = ''
 
       try {
-        const { report } = await reviewReport(
-          this.selected.id,
-          status,
-          this.reviewNote
-        )
+        const { report } = await reviewReport(reportId, status, note)
 
         this.reports = this.reports.map(item =>
           item.id === report.id ? report : item
         )
 
         this.selected = report
-        this.message = 'Review saved.'
+        this.reviewNote = report.reviewNote || ''
+        delete this.drafts[reportId]
+
+        this.message = status === 'resolved'
+          ? 'Report marked resolved. Your decision was saved.'
+          : 'Report dismissed. Your reason was saved; this action did not remove any content.'
       } catch (error) {
-        this.error = error.message
+        if (error.status === 409) {
+          this.saving = false
+          await this.loadReports()
+          this.error =
+            'This report is no longer pending. Check its refreshed status.'
+        } else {
+          this.error = error.message || 'Unable to save the review.'
+        }
       } finally {
         this.saving = false
+        this.openLinkedReport()
       }
     },
   },
@@ -128,31 +329,50 @@ export default {
 
 <template>
   <section class="admin-page">
-    <h1>Outfit request reports</h1>
-    <p>Review reported outfit requests and record your moderation decisions.</p>
+    <h1>Reports</h1>
+    <p>Review reported listings, outfit requests, and videos.</p>
 
-    <RouterLink :to="{ name: 'admin-dashboard' }" class="back-button">
+    <RouterLink
+      :to="{ name: 'admin-dashboard' }"
+      class="admin-button"
+    >
       ← Back to dashboard
     </RouterLink>
 
     <div class="filter-field">
-      <label for="report-filter">Report status</label>
+      <label for="report-type-filter">Report type</label>
+      <select
+        id="report-type-filter"
+        v-model="typeFilter"
+        :disabled="busy"
+      >
+        <option value="all">All types</option>
+        <option value="listing">Business listings</option>
+        <option value="request">Outfit requests</option>
+        <option value="video">Outfit videos</option>
+      </select>
 
-      <select id="report-filter" v-model="filter">
-        <option value="pending">Pending</option>
+      <label for="report-filter">Status</label>
+      <select id="report-filter" v-model="filter" :disabled="busy">
+        <option value="pending">Pending review</option>
         <option value="resolved">Resolved</option>
         <option value="dismissed">Dismissed</option>
-        <option value="all">All reports</option>
+        <option value="all">All statuses</option>
       </select>
 
       <button
         type="button"
-        :disabled="loading || saving || removing"
+        class="outline-button"
+        :disabled="busy"
         @click="loadReports"
       >
-        Refresh
+        {{ fetching ? 'Refreshing…' : 'Refresh' }}
       </button>
     </div>
+
+    <p v-if="loadError" class="error-message" role="alert">
+      {{ loadError }}
+    </p>
 
     <p v-if="error" class="error-message" role="alert">
       {{ error }}
@@ -164,11 +384,15 @@ export default {
 
     <p v-if="loading" role="status">Loading reports…</p>
 
-    <div v-else class="table-container">
+    <div
+      v-else-if="!loadError || reports.length"
+      class="table-container"
+    >
       <table>
         <thead>
           <tr>
-            <th scope="col">Outfit request</th>
+            <th scope="col">Reported post</th>
+            <th scope="col">Type</th>
             <th scope="col">Reported by</th>
             <th scope="col">Reason</th>
             <th scope="col">Date</th>
@@ -178,39 +402,53 @@ export default {
         </thead>
 
         <tbody>
-          <tr
-            v-for="report in filteredReports"
-            :key="report.id"
-          >
+          <tr v-for="report in filteredReports" :key="report.id">
             <td>{{ report.listingName }}</td>
+            <td>{{ reportTypeLabel(report.targetType) }}</td>
             <td>{{ report.reporterName }}</td>
             <td>{{ report.reason }}</td>
             <td>{{ formatDate(report.createdAt) }}</td>
-            <td>{{ report.status }}</td>
+            <td>{{ statusLabel(report.status) }}</td>
             <td>
               <button
                 type="button"
-                :disabled="saving || removing"
-                :aria-label="`View report for ${report.listingName}`"
+                class="admin-button"
+                :disabled="busy"
+                :aria-label="`Review report for ${report.listingName}`"
                 @click="selectReport(report)"
               >
-                View
+                Review
               </button>
             </td>
           </tr>
 
           <tr v-if="filteredReports.length === 0">
-            <td colspan="6">No reports to display.</td>
+            <td colspan="7">No reports match these filters.</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <section v-if="selected" class="review-card">
-      <h2>{{ selected.listingName }}</h2>
+    <section
+      v-if="selected"
+      ref="reviewPanel"
+      class="review-card"
+      tabindex="-1"
+      aria-labelledby="review-title"
+    >
+      <span class="type-label">
+        {{ reportTypeLabel(selected.targetType) }}
+      </span>
+
+      <h2 id="review-title">{{ selected.listingName }}</h2>
 
       <p>
         <strong>Reason:</strong> {{ selected.reason }}
+      </p>
+
+      <p>
+        <strong>Reported by:</strong> {{ selected.reporterName }}
+        · {{ formatDate(selected.createdAt) }}
       </p>
 
       <p class="explanation">
@@ -218,79 +456,158 @@ export default {
       </p>
 
       <RouterLink
-        v-if="!removedRequestIds.includes(selected.listingId)"
-        :to="{
-          name: 'community-request',
-          params: { requestId: selected.listingId },
-        }"
+        v-if="selected.canView"
+        :to="reportRoute(selected)"
+        class="admin-button"
       >
-        Open outfit request →
+        View {{ reportTypeLabel(selected.targetType).toLowerCase() }} →
       </RouterLink>
 
-      <p class="explanation">
-        Deleted requests are no longer available to open.
-        Their reports remain as moderation records.
+      <p v-else class="availability-message">
+        {{
+          selected.targetState === 'hidden'
+            ? 'This post has been hidden by the business.'
+            : 'This post is no longer available.'
+        }}
+        Its report remains available for review.
       </p>
 
       <p>
-        <strong>Status:</strong> {{ selected.status }}
+        <strong>Report status:</strong>
+        {{ statusLabel(selected.status) }}
       </p>
+
+      <div class="moderation-step">
+        <h3>Content actions</h3>
+        <p>
+          Inspect the post first. Remove content that breaks the rules,
+          or manage the owner's account if necessary.
+        </p>
+
+        <div class="actions">
+          <RouterLink
+            v-if="selected.targetType === 'listing' &&
+              selected.targetState !== 'removed'"
+            :to="{ name: 'admin-listings' }"
+            class="admin-button"
+          >
+            Manage listings
+          </RouterLink>
+
+          <template
+            v-if="['request', 'video'].includes(selected.targetType)"
+          >
+            <button
+              v-if="selected.targetState !== 'removed'"
+              type="button"
+              class="danger-button"
+              :disabled="busy"
+              @click="removePost"
+            >
+              {{ removing ? 'Removing…' : removalLabel }}
+            </button>
+
+            <span v-else class="removed-label" role="status">
+              {{
+                selected.targetType === 'video'
+                  ? 'Video removed'
+                  : 'Request removed'
+              }}
+            </span>
+          </template>
+
+          <RouterLink
+            :to="{ name: 'admin-users' }"
+            class="outline-button"
+          >
+            Manage users
+          </RouterLink>
+        </div>
+      </div>
+
 
       <form
         v-if="selected.status === 'pending'"
         @submit.prevent="submitReview('resolved')"
       >
-        <label for="review-note">Review note</label>
+        <div class="moderation-step">
+          <h3>Record your decision</h3>
 
-        <textarea
-          id="review-note"
-          v-model="reviewNote"
-          maxlength="1000"
-          rows="4"
-          required
-          :disabled="saving || removing"
-        ></textarea>
+          <label for="review-note">Decision reason (required)</label>
+          <textarea
+            id="review-note"
+            v-model="reviewNote"
+            maxlength="1000"
+            rows="4"
+            required
+            placeholder="Explain what you checked and any action taken, or why no violation was found."
+            :disabled="busy"
+          ></textarea>
+        </div>
 
-        <p>
-          Record your findings and any moderation action before resolving.
-          Resolving or dismissing a report does not delete the request.
-        </p>
+        <div class="moderation-step">
+          <h3>Close this report</h3>
+          <p>
+            Both options remove this report from the pending queue.
+            They do not remove the post or suspend its owner.
+          </p>
 
-        <div class="actions">
-          <button
-              v-if="!removedRequestIds.includes(selected.listingId)"
-              type="button"
-              class="remove-request-button"
-              :disabled="saving || removing"
-              @click="removeRequest"
-            >
-              {{ removing ? 'Removing…' : 'Remove request' }}
-            </button>
+          <div class="decision-options">
+            <div class="decision-option">
+              <strong>Issue handled</strong>
+              <p>
+                You addressed the problem. Record the action you took
+                in the decision reason above.
+              </p>
+              <button
+                type="submit"
+                class="admin-button"
+                :disabled="busy"
+              >
+                {{ saving ? 'Saving…' : 'Mark resolved' }}
+              </button>
+            </div>
 
-            <span
-              v-else
-              class="removed-label"
-              role="status"
-            >
-              Request removed
-            </span>
-          <button type="submit" :disabled="saving">
-            Resolve
-          </button>
-
-          <button
-            type="button"
-            :disabled="saving || removing"
-            @click="submitReview('dismissed')"
-          >
-            Dismiss
-          </button>
+            <div class="decision-option">
+              <strong>No violation found</strong>
+              <p>
+                You checked the report and decided no moderation
+                action was needed.
+              </p>
+              <button
+                type="button"
+                class="outline-button"
+                :disabled="busy"
+                @click="submitReview('dismissed')"
+              >
+                Dismiss report
+              </button>
+            </div>
+          </div>
         </div>
       </form>
 
-      <p v-else class="explanation">
-        <strong>Review note:</strong> {{ selected.reviewNote }}
-      </p>
+      <div v-else class="decision-history">
+        <h3>Recorded decision</h3>
+
+        <p>
+          {{
+            selected.status === 'resolved'
+              ? 'This report was marked as handled.'
+              : 'This report was dismissed.'
+          }}
+        </p>
+
+        <p class="explanation">
+          <strong>Decision reason:</strong>
+          {{ selected.reviewNote || 'No decision reason recorded.' }}
+        </p>
+
+        <p v-if="selected.reviewedAt">
+          <strong>Reviewed:</strong>
+          {{ formatDate(selected.reviewedAt) }}
+        </p>
+      </div>
     </section>
   </section>
 </template>
@@ -302,41 +619,98 @@ export default {
 }
 
 h1,
-h2 {
+h2,
+h3 {
   font-family: Georgia, serif;
 }
 
-a {
-  display: inline-block;
-  color: #683760;
-  margin-bottom: 20px;
+h1 {
+  margin: 0 0 10px;
 }
 
-.back-button {
-  display: inline-block;
-  margin-bottom: 20px;
+p {
+  line-height: 1.6;
+}
+
+.admin-page > p,
+.moderation-step p,
+.decision-history p {
+  color: #6d6870;
+}
+
+.admin-button,
+.outline-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 10px 18px;
+  border: 1px solid #683760;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.admin-button {
   background: #683760;
   color: white;
-  border-radius: 8px;
-  text-decoration: none;
 }
 
-.back-button:hover {
+.outline-button {
+  background: white;
+  color: #683760;
+}
+
+.danger-button {
+  background: #a0273f;
+  border-color: #a0273f;
+  color: white;
+}
+
+.admin-button:hover:not(:disabled) {
   background: #542c4e;
 }
 
-.back-button:focus-visible {
+.outline-button:hover:not(:disabled) {
+  background: #f6edf5;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #821e33;
+}
+
+button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.review-card:focus-visible {
   outline: 2px solid #683760;
   outline-offset: 3px;
 }
 
-.filter-field {
+.filter-field,
+.actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+.filter-field {
   margin: 24px 0;
+}
+
+label {
+  font-weight: bold;
 }
 
 select,
@@ -344,6 +718,9 @@ textarea {
   padding: 10px;
   border: 1px solid #ddd5df;
   border-radius: 8px;
+  background: white;
+  color: #44213f;
+  font: inherit;
 }
 
 .table-container {
@@ -360,8 +737,9 @@ table {
 
 th,
 td {
-  text-align: left;
   padding: 16px;
+  text-align: left;
+  vertical-align: top;
   border-bottom: 1px solid #e5dfe3;
 }
 
@@ -370,18 +748,8 @@ th {
   white-space: nowrap;
 }
 
-button {
-  padding: 10px 14px;
-  background: #683760;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .review-card {
@@ -390,22 +758,21 @@ button:disabled {
   border: 1px solid #e5dfe3;
   border-radius: 12px;
   background: white;
+  scroll-margin-top: 100px;
 }
 
-label {
-  font-weight: bold;
+.review-card h2 {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
 }
 
-textarea {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 8px 0 16px;
-}
-
-.actions {
-  display: flex;
-  gap: 12px;
+.type-label {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: #f3edf5;
+  color: #683760;
+  font-size: 13px;
 }
 
 .explanation {
@@ -413,29 +780,67 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.error-message {
-  color: #a0273f;
+.availability-message {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f7f1fa;
+  color: #6d6870;
 }
 
-.success-message {
-  color: #286344;
+.moderation-step,
+.decision-history {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5dfe3;
 }
 
-.remove-request-button {
-  background: #a0273f;
+.moderation-step h3,
+.decision-history h3 {
+  margin: 0 0 10px;
+  font-size: 21px;
 }
 
-.remove-request-button:hover:not(:disabled) {
-  background: #821e33;
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  resize: vertical;
+}
+
+.decision-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.decision-option {
+  padding: 20px;
+  border: 1px solid #e5dfe3;
+  border-radius: 12px;
+  background: #fcf8fb;
 }
 
 .removed-label {
-  align-self: center;
   color: #6d6870;
   font-size: 14px;
 }
 
-.actions {
-  flex-wrap: wrap;
+.admin-page .error-message {
+  color: #a0273f;
+}
+
+.admin-page .success-message {
+  color: #286344;
+}
+
+@media (max-width: 650px) {
+  .decision-options {
+    grid-template-columns: 1fr;
+  }
+
+  .review-card {
+    padding: 18px;
+  }
 }
 </style>

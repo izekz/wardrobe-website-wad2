@@ -3,13 +3,19 @@ const mongoose = require('mongoose')
 const schema = new mongoose.Schema({
   targetType: {
     type: String,
-    enum: ['listing', 'request'],
+    enum: ['listing', 'request', 'video'],
     required: true,
   },
   listingId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: function () {
-      return this.targetType === 'request' ? 'OutfitRequest' : 'Product'
+      const models = {
+        listing: 'Product',
+        request: 'OutfitRequest',
+        video: 'StyleVideo',
+      }
+
+      return models[this.targetType]
     },
     required: true,
   },

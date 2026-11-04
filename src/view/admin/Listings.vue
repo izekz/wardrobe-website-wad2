@@ -4,6 +4,8 @@ import {
   deleteListing,
 } from '../../services/adminService'
 
+import { reviewReport } from '../../services/reportService'
+
 export default {
   data() {
     return {
@@ -15,6 +17,8 @@ export default {
       actionError: '',
       message: '',
       failedImages: {},
+      reviewingId: null,
+      reviewNotes: {},
     }
   },
 
@@ -61,6 +65,52 @@ export default {
   },
 
   methods: {
+    async decideReport(listing, report, status) {
+      if (this.reviewingId !== null || this.deletingId !== null) return
+
+      const note = (this.reviewNotes[report.id] || '').trim()
+
+      this.actionError = ''
+      this.message = ''
+
+      if (!note) {
+        this.actionError = 'Enter a review note before resolving or dismissing.'
+        document.getElementById(`listing-report-note-${report.id}`)?.focus()
+        return
+      }
+
+      this.reviewingId = report.id
+
+      try {
+        const result = await reviewReport(report.id, status, note)
+
+        listing.reports = listing.reports.map(item =>
+          item.id === result.report.id ? result.report : item
+        )
+
+        delete this.reviewNotes[report.id]
+
+        this.message = status === 'resolved'
+          ? 'Report resolved.'
+          : 'Report dismissed.'
+      } catch (error) {
+        if (error.status === 409) {
+          try {
+            const data = await getListings()
+            this.listings = data.listings
+            this.actionError =
+              'This report was already reviewed. The listings have been refreshed.'
+          } catch {
+            this.actionError =
+              'This report was already reviewed, but refreshing failed. Reload the page to see its current status.'
+          }
+        } else {
+          this.actionError = error.message || 'Unable to update the report.'
+        }
+      } finally {
+        this.reviewingId = null
+      }
+    },
     formatPrice(price) {
       return `S$${Number(price).toFixed(2)}`
     },
@@ -70,11 +120,11 @@ export default {
     },
 
     async removeListing(listing) {
-      if (this.deletingId !== null) return
+      if (this.deletingId !== null || this.reviewingId !== null) return
 
       const confirmed = window.confirm(
         `Delete "${listing.name}" from ${listing.businessName}? ` +
-        'This permanently removes the listing and cannot be undone.'
+        'This permanently removes the listing and all its linked Style Feed videos. This cannot be undone.'
       )
 
       if (!confirmed) return
@@ -90,9 +140,18 @@ export default {
           item => item.id !== listing.id
         )
 
-        this.message = `"${listing.name}" has been deleted.`
+        this.message = `"${listing.name}" and its linked Style Feed videos have been deleted.`
       } catch (error) {
-        this.actionError = error.message || 'Unable to delete listing.'
+        if (error.status === 404) {
+          this.listings = this.listings.filter(
+            item => item.id !== listing.id
+          )
+
+          this.message =
+            `"${listing.name}" was already deleted. It has been removed from this page.`
+        } else {
+          this.actionError = error.message || 'Unable to delete listing.'
+        }
       } finally {
         this.deletingId = null
       }
@@ -195,7 +254,7 @@ export default {
             <button
               type="button"
               class="delete-button"
-              :disabled="deletingId !== null"
+              :disabled="deletingId !== null || reviewingId !== null"
               :aria-label="`Delete listing: ${listing.name}`"
               @click="removeListing(listing)"
             >
@@ -239,9 +298,48 @@ export default {
               </p>
 
               <p v-if="report.reviewNote" class="report-text">
-                <strong>Review note:</strong> {{ report.reviewNote }}
-              </p>
-            </div>
+              <strong>Review note:</strong> {{ report.reviewNote }}
+            </p>
+
+            <form
+              v-if="report.status === 'pending'"
+              class="report-review"
+              @submit.prevent="decideReport(listing, report, 'resolved')"
+            >
+              <label :for="`listing-report-note-${report.id}`">
+                Review note
+              </label>
+
+              <textarea
+                :id="`listing-report-note-${report.id}`"
+                v-model="reviewNotes[report.id]"
+                rows="2"
+                maxlength="1000"
+                required
+                placeholder="Explain your decision or action taken."
+                :disabled="reviewingId !== null || deletingId !== null"
+              ></textarea>
+
+              <div class="report-review-actions">
+                <button
+                  type="submit"
+                  class="resolve-button"
+                  :disabled="reviewingId !== null || deletingId !== null"
+                >
+                  {{ reviewingId === report.id ? 'Saving…' : 'Resolve' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="dismiss-button"
+                  :disabled="reviewingId !== null || deletingId !== null"
+                  @click="decideReport(listing, report, 'dismissed')"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </form>
+          </div>
           </div>
         </article>
       </section>
@@ -250,6 +348,70 @@ export default {
 </template>
 
 <style scoped>
+.report-review {
+  margin-top: 16px;
+}
+
+.report-review label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.report-review textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #ddd5df;
+  border-radius: 8px;
+  background: white;
+  color: #44213f;
+  font: inherit;
+  resize: vertical;
+}
+
+.report-review textarea:focus-visible {
+  outline: 2px solid #683760;
+  outline-offset: 3px;
+}
+
+.report-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.resolve-button,
+.dismiss-button {
+  padding: 10px 18px;
+  border: 1px solid #683760;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.resolve-button {
+  background: #683760;
+  color: white;
+}
+
+.resolve-button:hover:not(:disabled) {
+  background: #542c4e;
+}
+
+.dismiss-button {
+  background: white;
+  color: #683760;
+}
+
+.dismiss-button:hover:not(:disabled) {
+  background: #f6edf5;
+}
+
 .admin-page {
   color: #44213f;
   padding: 24px 0 40px;

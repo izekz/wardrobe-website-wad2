@@ -2,6 +2,7 @@ const User = require('../models/User')
 const Product = require('../models/Product')
 const Report = require('../models/Report')
 const OutfitRequest = require('../models/OutfitRequest')
+const StyleVideo = require('../models/StyleVideo')
 
 async function getUsers(req, res, next) {
   try {
@@ -48,7 +49,7 @@ async function updateUserStatus(req, res, next) {
       })
     }
 
-    // Only update non-admin accounts.
+    // Administrator accounts remain protected.
     const user = await User.findOneAndUpdate(
       { _id: id, role: { $ne: 'admin' } },
       { $set: { suspended } },
@@ -138,17 +139,33 @@ async function deleteListing(req, res, next) {
       })
     }
 
-    const listing = await Product.findByIdAndDelete(id)
+    const result = await Product.db.transaction(async session => {
+      const listing = await Product.findById(id).session(session)
 
-    if (!listing) {
+      if (!listing) return null
+
+      const videos = await StyleVideo.deleteMany(
+        { productId: String(listing._id) },
+        { session }
+      )
+
+      await Product.deleteOne({ _id: listing._id }, { session })
+
+      return {
+        id: String(listing._id),
+        deletedVideoCount: videos.deletedCount,
+      }
+    })
+
+    if (!result) {
       return res.status(404).json({
         message: 'Listing not found or already deleted.',
       })
     }
 
     res.json({
-      message: 'Business listing deleted.',
-      id: String(listing._id),
+      message: 'Business listing and its linked Style Feed videos deleted.',
+      ...result,
     })
   } catch (error) {
     next(error)
@@ -197,10 +214,38 @@ async function deleteOutfitRequest(req, res, next) {
   }
 }
 
+async function deleteOutfitVideo(req, res, next) {
+  try {
+    const { id } = req.params
+
+    if (!/^[a-fA-F0-9]{24}$/.test(id)) {
+      return res.status(400).json({
+        message: 'Invalid video ID.',
+      })
+    }
+
+    const video = await StyleVideo.findByIdAndDelete(id)
+
+    if (!video) {
+      return res.status(404).json({
+        message: 'Video not found or already removed.',
+      })
+    }
+
+    res.json({
+      message: 'Outfit video removed.',
+      id: String(video._id),
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   getUsers,
   updateUserStatus,
   getListings,
   deleteListing,
   deleteOutfitRequest,
+  deleteOutfitVideo,
 }
