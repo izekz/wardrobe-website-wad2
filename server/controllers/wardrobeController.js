@@ -55,7 +55,9 @@ function createWardrobeController(
       style: [doc.style], material: doc.material || '', colour, colours: itemColours({ colour }), size,
       availableColours: listedColours(doc), price: doc.price, source: 'store',
       ...inferSuitability({ category: doc.category, colour, material: doc.material, style: [doc.style] }),
-      imageURL: `/api/catalog/products/${doc._id}/image`,
+      imageURL: doc.colourPhotos?.some(row => row.colour === colour)
+        ? `/api/catalog/products/${doc._id}/colour-image/${encodeURIComponent(colour)}`
+        : `/api/catalog/products/${doc._id}/image`,
     };
   }
   async function storeProduct(productId, selectedColour, selectedSize, requireVariant = false) {
@@ -124,9 +126,13 @@ function createWardrobeController(
     const entry = { productId: piece.productId, colour: piece.colour, size: piece.size };
     const user = await User.findOne(filter).select('+plannerProducts');
     if (!user) return res.status(404).json({ message: 'Account not found.' });
+    const requireNew = req.body.requireNewProduct === true;
+    if (requireNew && (user.plannerProducts || []).some(piece => String(piece.productId) === entry.productId))
+      throw Object.assign(new Error('This product is already in your planner. Refresh its details and update the existing item.'), { status: 409 });
     if ((user.plannerProducts || []).some(piece => productKey(piece) === productKey(entry))) return res.json(await plannerJson(user));
-    const updated = await User.findOneAndUpdate({ ...filter, 'plannerProducts.29': { $exists: false } },
+    const updated = await User.findOneAndUpdate({ ...filter, 'plannerProducts.29': { $exists: false }, ...(requireNew ? { plannerProducts: user.plannerProducts } : {}) },
       { $addToSet: { plannerProducts: entry } }, { new: true, runValidators: true, projection: { plannerProducts: 1 } });
+    if (!updated && requireNew) throw Object.assign(new Error('Your planner changed in another tab or is full. Refresh before adding this product.'), { status: 409 });
     if (!updated) throw v.badRequest('Your planner can hold up to 30 store products. Remove one before adding another.');
     res.json(await plannerJson(updated));
   }

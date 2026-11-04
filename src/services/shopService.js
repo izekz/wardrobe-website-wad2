@@ -107,10 +107,17 @@ async function persistCart(lines, ctx) {
   if (!Array.isArray(result.cart)) throw new Error('The server returned unexpected cart data. Please refresh your cart.')
   shopState.cart = result.cart
 }
-export function addToCart(product, { size = '', colour = '', quantity = 1 } = {}) {
+export function addToCart(product, { size = '', colour = '', quantity = 1, requireNewProduct = false } = {}) {
   return mutate(async ctx => {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10 || !product.stock) throw new Error('Choose an available quantity between 1 and 10.')
     const line = { productId: String(product.productId), size, colour, quantity }
+    if (requireNewProduct) {
+      if (shopState.cart.some(item => item.productId === line.productId)) throw new Error('This product is already in your cart. Use Update cart item.');
+      const result = await request('/cart', { method: 'PUT', body: JSON.stringify({ cart: [line], newProductId: line.productId }) }, ctx);
+      if (!Array.isArray(result.cart)) throw new Error('Unexpected cart response. Please refresh your cart.');
+      shopState.cart = result.cart;
+      return result.cart.find(item => item.key === lineKey(line));
+    }
     const lines = shopState.cart.map(item => ({ ...item })), existing = lines.find(item => item.key === lineKey(line))
     // Person 4: the limit is the stock of the chosen size (older listings share one stock).
     const max = Number((product.sizeStock && size ? product.sizeStock[size] : product.stock) || 0)

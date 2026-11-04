@@ -2,7 +2,7 @@
 import '../../assets/styles/discover.css'
 import { catalogApi, money } from '../../services/catalogApi'
 import { authState } from '../../services/authService'
-import { isLiked, toggleLike, addToCart, updateCartItem, shopState } from '../../services/shopService'
+import { isLiked, toggleLike, addToCart, updateCartItem, hydrateShop, shopState } from '../../services/shopService'
 import { plannerProductsState, hydratePlannerProducts, addPlannerProduct, updatePlannerProduct, storeVariantKey } from '../../services/wardrobeService'
 import CommunityIcon from '../../components/CommunityIcon.vue'
 import RequestSuggestionAction from '../../components/RequestSuggestionAction.vue'
@@ -10,18 +10,24 @@ import SkipFeedback from '../../components/SkipFeedback.vue'
 import ReportDialog from '../../components/ReportDialog.vue'
 export default {
   components:{CommunityIcon,SkipFeedback,RequestSuggestionAction,ReportDialog},
-  data(){return{reportOpen:false,product:null,business:null,loading:true,error:'',size:'',colour:'',shoppingBusy:false,skipping:false,toast:'',cartSelectionNotice:'',plannerBusy:false,plannerMessage:'',plannerError:'',loadVersion:0,activeImage:0,quantity:1}},
+  data(){return{reportOpen:false,product:null,business:null,loading:true,error:'',size:'',colour:'',shoppingBusy:false,skipping:false,toast:'',cartSelectionNotice:'',entryRefreshError:'',plannerBusy:false,plannerMessage:'',plannerError:'',loadVersion:0,activeImage:0,quantity:1}},
   computed:{plannerState(){return plannerProductsState},
-    editingCart(){return !this.isSuggestion&&this.$route.query.fromCart==='1'},
-    editingPlanner(){return !this.isSuggestion&&this.$route.query.fromPlanner==='1'},
-    cartSourceKey(){return this.originalKey('cart')},
-    plannerSourceKey(){return this.originalKey('planner')},
-    plannerAdded(){return !!this.product&&plannerProductsState.products.some(piece=>piece.available&&storeVariantKey(piece)===storeVariantKey({productId:this.product.productId,colour:this.colour,size:this.size}))},
-    canPlan(){return this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)},
-    saved(){return !!this.product&&isLiked(this.product.productId)},shoppingReady(){return shopState.ready&&!shopState.loading&&!shopState.pending},
+    cartProductLines(){return shopState.cart.filter(line=>line.productId===this.product?.productId)},
+    plannerProductLines(){return plannerProductsState.products.filter(piece=>piece.productId===this.product?.productId)},
+    linkedCartLine(){return this.resolveEntry('cart').entry},
+    linkedPlannerPiece(){return this.resolveEntry('planner').entry},
+    editingCart(){return !this.isSuggestion&&(this.$route.query.fromCart==='1'||this.$route.query.cartKey!==undefined||this.cartProductLines.length>0)},
+    editingPlanner(){return !this.isSuggestion&&(this.$route.query.fromPlanner==='1'||this.$route.query.plannerKey!==undefined||this.plannerProductLines.length>0)},
+    cartSourceKey(){return this.resolveEntry('cart').key},
+    plannerSourceKey(){return this.resolveEntry('planner').key},
+    cartChoiceRequired(){return this.editingCart&&!this.cartSourceKey},
+    plannerChoiceRequired(){return this.editingPlanner&&!this.plannerSourceKey},
+    plannerReady(){return plannerProductsState.ready&&!plannerProductsState.loading&&!plannerProductsState.pending&&!this.entryRefreshError},
+    canPlan(){return this.plannerReady&&!this.plannerChoiceRequired&&this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)},
+    saved(){return !!this.product&&isLiked(this.product.productId)},shoppingReady(){return shopState.ready&&!shopState.loading&&!shopState.pending&&!this.entryRefreshError},
     availableColours(){return this.product?.availableColours||this.product?.colours||(this.product?.colour?[this.product.colour]:[])}, isShopper(){return authState.user?.role==='consumer'}, isSuggestion(){return typeof this.$route.query.requestId==='string'&&typeof this.$route.query.responseId==='string'}, wardrobeRoute(){return this.$router.getRoutes().find(r=>['outfit-match','wardrobe-match','style-with-wardrobe'].includes(r.name))},
     gallery(){if(!this.product)return[];return[{src:this.product.colourImages?.[this.colour]||this.product.imageURL,label:this.colour&&this.product.colourImages?.[this.colour]?this.colour:'Product view'},...(this.product.sizeImageURL?[{src:this.product.sizeImageURL,label:'Size guide'}]:[])]}, sizeLeft(){return s=>this.product?.sizeStock?(this.product.sizeStock[s]||0):(this.product?.stock||0)}, selectedStock(){if(!this.product)return 0;return this.size?this.sizeLeft(this.size):this.product.stock},
-    canCart(){return this.shoppingReady&&this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)}
+    canCart(){return this.shoppingReady&&!this.cartChoiceRequired&&this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)}
   },
 watch: {
   '$route.params.productId': {
@@ -45,7 +51,7 @@ watch: {
     )
   },
 },
-  methods:{money,
+  methods:{money,storeVariantKey,
     originalKey(source) {
       const query=this.$route.query, explicit=query[source+'Key'];
       if(explicit!==undefined)return typeof explicit==='string'?explicit:'';
@@ -54,73 +60,113 @@ watch: {
       const productId=this.$route.params.productId,colour=query.colour||'',size=query.size||'';
       return source==='cart'?`${productId}:${size}:${colour}`:`${productId}:${colour}:${size}`;
     },
-    async load(){const v=++this.loadVersion;this.loading=true;this.error='';this.activeImage=0;this.cartSelectionNotice='';this.plannerMessage='';this.plannerError='';try{const r=await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`);if(v!==this.loadVersion)return;this.product=r.product;this.business=r.business;this.restoreSelections();if(this.isShopper)void hydratePlannerProducts().catch(()=>{})}catch(e){if(v===this.loadVersion)this.error=e.message}finally{if(v===this.loadVersion)this.loading=false}},
-    restoreSelections() {
-      const sizes = this.product.sizes || []
-      this.colour = this.availableColours.length === 1 ? this.availableColours[0] : ''
-      this.size = sizes.length === 1 && this.sizeLeft(sizes[0]) > 0 ? sizes[0] : ''
-      this.quantity = 1
-      this.cartSelectionNotice = ''
-      if (this.isSuggestion || (this.$route.query.fromCart !== '1' && this.$route.query.fromPlanner !== '1')) return
-
-      // URL values are only form defaults; current catalogue options and stock take priority.
-      const { colour, size, quantity } = this.$route.query, notices = []
-      if (colour) {
-        if (typeof colour === 'string' && this.availableColours.includes(colour)) this.colour = colour
-        else {
-          this.colour = ''
-          notices.push(`Your saved colour is no longer available.${this.availableColours.length ? ' Choose another colour.' : ''}`)
-        }
+    resolveEntry(source){
+      if(this.isSuggestion)return {key:'',entry:null};
+      const query=this.$route.query,rows=source==='cart'?this.cartProductLines:this.plannerProductLines;
+      const keyOf=row=>source==='cart'?row.key:storeVariantKey(row);
+      // Once linked, keep the original source even if another tab changes/removes it.
+      if(query[source+'Key']!==undefined||query[source==='cart'?'fromCart':'fromPlanner']==='1'){
+        const key=this.originalKey(source);return {key,entry:rows.find(row=>keyOf(row)===key)||null};
       }
-      if (size) {
-        if (typeof size === 'string' && sizes.includes(size) && this.sizeLeft(size) > 0) this.size = size
-        else {
-          this.size = ''
-          notices.push(`Your saved size is no longer available.${sizes.length ? ' Choose another size.' : ''}`)
-        }
-      }
-      if (this.$route.query.fromCart === '1' && quantity != null) {
-        const requested = typeof quantity === 'string' && quantity.trim() ? Number(quantity) : NaN
-        if (Number.isSafeInteger(requested) && requested > 0) {
-          this.quantity = Math.max(1, Math.min(requested, this.selectedStock, 10))
-          if (this.quantity !== requested) notices.push('Quantity has been adjusted to the current stock limit.')
-        } else notices.push('Your saved quantity could not be used. Please review the quantity.')
-      }
-      this.cartSelectionNotice = notices.join(' ')
+      const exact=rows.find(row=>row.colour===(query.colour||'')&&row.size===(query.size||''));
+      const entry=exact||(rows.length===1?rows[0]:null);
+      return {key:entry?keyOf(entry):'',entry};
     },
+    entryPins(){
+      return {...(this.cartSourceKey?{cartKey:this.cartSourceKey}:{}),...(this.plannerSourceKey?{plannerKey:this.plannerSourceKey}:{})};
+    },
+    async refreshEntries(){
+      const results=await Promise.allSettled([hydrateShop(true),hydratePlannerProducts(true)]);
+      this.entryRefreshError=results.some(result=>result.status==='rejected')?'Could not check your saved cart and planner items. Retry before making changes.':'';
+    },
+    async load(){
+      const v=++this.loadVersion;this.loading=true;this.error='';this.activeImage=0;
+      this.cartSelectionNotice='';this.entryRefreshError='';this.plannerMessage='';this.plannerError='';
+      try{
+        const r=await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`);
+        if(v!==this.loadVersion)return;
+        this.product=r.product;this.business=r.business;
+        if(this.isShopper){await this.refreshEntries();if(v!==this.loadVersion)return;}
+        this.restoreSelections();
+        if(!this.isSuggestion&&!this.entryRefreshError){
+          // Pin both independently before changing either one's settings.
+          const pins=this.entryPins();
+          if(Object.entries(pins).some(([key,value])=>this.$route.query[key]!==value))
+            await this.$router.replace({query:{...this.$route.query,...pins}});
+        }
+      }catch(e){if(v===this.loadVersion)this.error=e.message}
+      finally{if(v===this.loadVersion)this.loading=false}
+    },
+    restoreSelections(){
+      const sizes=this.product.sizes||[],query=this.$route.query,notices=[];
+      this.colour=this.availableColours.length===1?this.availableColours[0]:'';
+      this.size=sizes.length===1&&this.sizeLeft(sizes[0])>0?sizes[0]:'';
+      this.quantity=1;this.cartSelectionNotice='';
+      if(this.isSuggestion)return;
+      const saved=this.linkedCartLine||this.linkedPlannerPiece;
+      const colour=query.colour??saved?.colour,size=query.size??saved?.size;
+      if(colour){
+        if(typeof colour==='string'&&this.availableColours.includes(colour))this.colour=colour;
+        else{this.colour='';notices.push('Your saved colour is no longer available. Choose another colour.');}
+      }
+      if(size){
+        if(typeof size==='string'&&sizes.includes(size)&&this.sizeLeft(size)>0)this.size=size;
+        else{this.size='';notices.push('Your saved size is no longer available. Choose another size.');}
+      }
+      const requested=this.linkedCartLine?.quantity??(query.fromCart==='1'&&typeof query.quantity==='string'?Number(query.quantity):1);
+      if(Number.isSafeInteger(requested)&&requested>0){
+        this.quantity=Math.max(1,Math.min(requested,this.selectedStock,10));
+        if(this.quantity!==requested)notices.push('Cart quantity has been adjusted to the current stock limit.');
+      }else notices.push('Your saved quantity could not be used. Please review the quantity.');
+      this.cartSelectionNotice=notices.join(' ');
+    },
+    async chooseEntry(source,event){
+      const rows=source==='cart'?this.cartProductLines:this.plannerProductLines;
+      const keyOf=row=>source==='cart'?row.key:storeVariantKey(row);
+      const entry=rows.find(row=>keyOf(row)===event.target.value);
+      if(!entry)return;
+      await this.$router.replace({query:{...this.$route.query,...this.entryPins(),[source+'Key']:keyOf(entry),colour:this.colour,size:this.size}});
+    },
+    chooseCartEntry(event){return this.chooseEntry('cart',event)},
+    choosePlannerEntry(event){return this.chooseEntry('planner',event)},
     async save(){if(this.shoppingBusy)return;this.shoppingBusy=true;try{const liked=await toggleLike(this.product.productId);this.flash(liked?'Added to Likes.':'Removed from Likes.')}catch(e){if(e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}finally{this.shoppingBusy=false}},
     async addCart(){
       if(this.shoppingBusy||this.plannerBusy||!this.canCart)return;
       const version=this.loadVersion,productId=this.product.productId,sourceKey=this.cartSourceKey,editing=this.editingCart;
-      const options={size:this.size,colour:this.colour,quantity:this.quantity};
+      const options={size:this.size,colour:this.colour,quantity:this.quantity},pins=this.entryPins(),query=JSON.stringify(this.$route.query);
+      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&JSON.stringify(this.$route.query)===query;
       this.shoppingBusy=true;
-      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&this.editingCart===editing&&this.cartSourceKey===sourceKey;
       try{
-        if(editing){
-          const updated=await updateCartItem(sourceKey,this.product,options);
-          if(samePage()){
-            await this.$router.replace({query:{...this.$route.query,cartKey:updated.key,colour:updated.colour,size:updated.size,quantity:String(updated.quantity)}});
-            this.flash('Cart item updated.');
-          }
-        }else{await addToCart(this.product,options);if(samePage())this.flash('Added to cart.')}
-      }catch(e){if(samePage()&&e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}
-      finally{this.shoppingBusy=false}
+        const updated=editing?await updateCartItem(sourceKey,this.product,options):await addToCart(this.product,{...options,requireNewProduct:true});
+        if(samePage()){
+          await this.$router.replace({query:{...this.$route.query,...pins,cartKey:updated.key,colour:updated.colour,size:updated.size,quantity:String(updated.quantity)}});
+          this.flash(editing?'Cart item updated.':'Added to cart.');
+        }
+      }catch(e){
+        if(samePage()&&e.code!=='ACCOUNT_CHANGED'){
+          if(!editing){await this.refreshEntries();if(!samePage())return;}
+          this.flash(e.message);
+        }
+      }finally{this.shoppingBusy=false}
     },
     async addToPlanner(){
       if(this.plannerBusy||this.shoppingBusy||!this.canPlan)return;
       const version=this.loadVersion,productId=this.product.productId,colour=this.colour,size=this.size,sourceKey=this.plannerSourceKey,editing=this.editingPlanner;
-      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&this.editingPlanner===editing&&this.plannerSourceKey===sourceKey;
+      const pins=this.entryPins(),query=JSON.stringify(this.$route.query);
+      const samePage=()=>version===this.loadVersion&&this.product?.productId===productId&&JSON.stringify(this.$route.query)===query;
       this.plannerBusy=true;this.plannerMessage='';this.plannerError='';
       try{
-        if(editing){
-          const result=await updatePlannerProduct(sourceKey,this.product,{colour,size});
-          if(samePage()){
-            await this.$router.replace({query:{...this.$route.query,plannerKey:result.key,colour,size}});
-            this.plannerMessage='Planner item updated.';
-          }
-        }else{await addPlannerProduct(this.product,{colour,size});if(samePage())this.plannerMessage='Added to your planner.'}
-      }catch(error){if(samePage()&&error.code!=='ACCOUNT_CHANGED')this.plannerError=error.message}
-      finally{this.plannerBusy=false}
+        const result=editing?await updatePlannerProduct(sourceKey,this.product,{colour,size}):await addPlannerProduct(this.product,{colour,size,requireNewProduct:true});
+        if(samePage()){
+          await this.$router.replace({query:{...this.$route.query,...pins,plannerKey:result.key||storeVariantKey({productId,colour,size}),colour,size}});
+          this.plannerMessage=editing?'Planner item updated.':'Added to your planner.';
+        }
+      }catch(error){
+        if(samePage()&&error.code!=='ACCOUNT_CHANGED'){
+          if(!editing){await this.refreshEntries();if(!samePage())return;}
+          this.plannerError=error.message;
+        }
+      }finally{this.plannerBusy=false}
     },
     flash(m){this.toast=m;clearTimeout(this.toastTimer);this.toastTimer=setTimeout(()=>this.toast='',2600)},
     async skipped(){this.skipping=false;try{const next=(await catalogApi('/products?forYou=true')).products.find(p=>p.productId!==this.product.productId);if(next){await this.$router.push({name:'discover-product',params:{productId:next.productId}});this.flash('Thanks! We will adjust your recommendations!');return}}catch{}await this.$router.push({name:'discover'})}
@@ -173,9 +219,26 @@ watch: {
   target-type="listing"
   @close="reportOpen = false"
 />
+  <div v-if="!isSuggestion&&cartProductLines.length>1" class="disc-option-block">
+    <label for="detail-cart-entry">Cart item to update</label>
+    <select id="detail-cart-entry" class="form-select" :value="cartSourceKey" :disabled="shoppingBusy||plannerBusy||!shoppingReady" @change="chooseCartEntry">
+      <option disabled value="">Choose a cart item</option>
+      <option v-for="line in cartProductLines" :key="line.key" :value="line.key">{{[line.colour,line.size?`Size ${line.size}`:'',`Qty ${line.quantity}`].filter(Boolean).join(' · ')}}</option>
+    </select>
+  </div>
+  <div v-if="!isSuggestion&&plannerProductLines.length>1" class="disc-option-block">
+    <label for="detail-planner-entry">Planner item to update</label>
+    <select id="detail-planner-entry" class="form-select" :value="plannerSourceKey" :disabled="shoppingBusy||plannerBusy||!plannerReady" @change="choosePlannerEntry">
+      <option disabled value="">Choose a planner item</option>
+      <option v-for="piece in plannerProductLines" :key="storeVariantKey(piece)" :value="storeVariantKey(piece)">{{[piece.colour,piece.size?`Size ${piece.size}`:''].filter(Boolean).join(' · ')||'Original options'}}</option>
+    </select>
+  </div>
+  <p v-if="entryRefreshError" role="alert" class="community-error small">{{entryRefreshError}} <button type="button" class="community-text-button" @click="load">Retry</button></p>
+  <p v-if="plannerChoiceRequired" class="community-muted small" role="status">Choose the planner item you want to update.</p>
+  <p v-if="cartChoiceRequired" class="community-muted small" role="status">Choose the cart item you want to update.</p>
   <div v-if="isShopper&&!isSuggestion" class="disc-buy-row"><select v-model.number="quantity" :disabled="shoppingBusy||plannerBusy" aria-label="Quantity"><option v-for="n in Math.min(selectedStock,10)" :key="n" :value="n">Qty {{n}}</option></select><button class="community-btn disc-add-cart" :disabled="!canCart||shoppingBusy||plannerBusy" @click="addCart">{{shoppingBusy?'Saving…':editingCart?'Update cart item':'Add to cart'}}</button></div>
   <div class="disc-actions"><div v-if="wardrobeRoute&&isShopper&&!isSuggestion" class="disc-planner-action">
-    <button type="button" class="community-btn community-btn-outline" :disabled="!canPlan||shoppingBusy||plannerBusy||plannerState.pending>0||(!editingPlanner&&plannerAdded)" @click="addToPlanner"><CommunityIcon name="hanger" :size="21"/>{{plannerBusy?'Saving…':editingPlanner?'Update planner item':plannerAdded?'Added to Outfit Planner':'Add to Outfit Planner'}}</button>
+    <button type="button" class="community-btn community-btn-outline" :disabled="!canPlan||shoppingBusy||plannerBusy||plannerState.pending>0" @click="addToPlanner"><CommunityIcon name="hanger" :size="21"/>{{plannerBusy?'Saving…':editingPlanner?'Update planner item':'Add to Outfit Planner'}}</button>
     <p class="community-muted small mb-0 mt-2">See how this piece works with clothes you already own.</p>
     <p v-if="plannerMessage" role="status" class="small mt-2 mb-0">{{plannerMessage}}</p>
     <p v-if="plannerError" role="alert" class="community-error small mt-2 mb-0">{{plannerError}}</p>

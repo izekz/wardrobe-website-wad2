@@ -200,8 +200,8 @@ function mutatePlanner(path, options) {
   plannerQueue = task.catch(() => {});
   return task;
 }
-export function addPlannerProduct(product, { colour = '', size = '' } = {}) {
-  return mutatePlanner('', send('POST', { productId: product.productId, colour, size }));
+export function addPlannerProduct(product, { colour = '', size = '', requireNewProduct = false } = {}) {
+  return mutatePlanner('', send('POST', { productId: product.productId, colour, size, ...(requireNewProduct ? { requireNewProduct: true } : {}) }));
 }
 export function updatePlannerProduct(key, product, { colour = '', size = '' } = {}) {
   return mutatePlanner('/' + encodeURIComponent(key), send('PUT', { productId: product.productId, colour, size }));
