@@ -2,7 +2,8 @@ const { singaporeToday } = require("../communityValidation");
 let cached;
 function description(code) {
   if (code === 0) return "Clear skies";
-  if (code <= 3) return "Partly cloudy";
+  if (code <= 2) return "Partly cloudy";
+  if (code === 3) return "Overcast";
   if (code <= 48) return "Foggy";
   if (code >= 95) return "Thunderstorms";
   if ([71, 73, 75, 77, 85, 86].includes(code)) return "Snow";
@@ -70,6 +71,7 @@ async function getWeather(date, fetcher = fetch) {
       location: "Singapore",
       temperature,
       condition: description(code),
+      weatherCode: code,
       rainChance,
       tags: [temperature >= 27 ? "Warm" : "Cool", ...(rainy ? ["Rainy"] : [])],
       source: "Open-Meteo",

@@ -661,6 +661,18 @@ test("weather handles Singapore dates, API failure and out-of-range forecasts ho
   assert.deepEqual(forecast.tags, ["Warm", "Rainy"]);
   assert.equal(requested.searchParams.get("timezone"), "Asia/Singapore");
   assert.equal(forecast.condition, "Thunderstorms");
+  assert.equal(forecast.weatherCode, 95);
+  // Preserve the API code so the planner can distinguish sunny, partly cloudy and overcast.
+  for (const [code, condition] of [[0, "Clear skies"], [2, "Partly cloudy"], [3, "Overcast"], [45, "Foggy"], [61, "Rain / showers"], [71, "Snow"]]) {
+    const result = await getWeather(today, async () => ({
+      ok: true,
+      json: async () => ({ daily: { time: [today], temperature_2m_max: [29], weather_code: [code], precipitation_probability_max: [null] } }),
+    }));
+    assert.equal(result.available, true);
+    assert.equal(result.weatherCode, code);
+    assert.equal(result.condition, condition);
+    assert.equal(result.rainChance, null);
+  }
   assert.equal(
     (
       await getWeather(today, async () => {
