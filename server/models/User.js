@@ -16,6 +16,12 @@ const schema = new mongoose.Schema({
     colour: { type: String, default: '', maxlength: 20 },
     quantity: { type: Number, required: true, min: 1, max: 10, validate: Number.isInteger }
   }, { _id: false })], default: [], select: false },
+  // Account-owned products collected for outfit planning; separate from the shopping cart.
+  plannerProducts: { type: [new mongoose.Schema({
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    colour: { type: String, default: '', maxlength: 20 },
+    size: { type: String, default: '', maxlength: 20 }
+  }, { _id: false })], default: [], select: false },
   surveyCompleted: { type: Boolean, default: false }
 }, { timestamps: true, collection: 'users' });
 module.exports = mongoose.models.User || mongoose.model('User', schema);

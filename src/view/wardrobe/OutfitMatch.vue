@@ -14,14 +14,15 @@ import {
   categoryName,
   matchesSearch,
   normalizeOccasion,
+  plannerProductsState, hydratePlannerProducts, removePlannerProduct, storeVariantKey,
 } from "../../services/wardrobeService";
 const route = useRoute(),
   router = useRouter();
 const items = ref([]),
-  product = ref(null),
+  products = ref([]),
   weather = ref(null);
 const selectedIds = ref([]),
-  selectedProduct = ref(false),
+  selectedStoreKeys = ref([]),
   selection = ref(null);
 const loading = ref(true),
   busy = ref(false),
@@ -36,14 +37,13 @@ const occasion = ref("Presentation"),
   initialized = ref(false);
 const editOutfitId = computed(() => typeof route.query.outfitId === "string" ? route.query.outfitId : undefined);
 const isEditing = computed(() => !!editOutfitId.value);
-const loadedOutfitId = ref(null), editStorePiece = ref(null), editNotices = ref([]);
+const loadedOutfitId = ref(null), editStorePieces = ref([]), editNotices = ref([]);
+const candidateRefs = ref([]), unavailableStoreProducts = ref([]);
 function noteEdit(message) { if (!editNotices.value.includes(message)) editNotices.value.push(message); }
-const productId = computed(() => isEditing.value ? editStorePiece.value?.productId :
-  typeof route.query.productId === "string" ? route.query.productId : undefined);
-const productColour = computed(() => isEditing.value ? editStorePiece.value?.colour || undefined :
-  typeof route.query.colour === "string" ? route.query.colour : undefined);
+const productId = computed(() => !isEditing.value && typeof route.query.productId === 'string' ? route.query.productId : undefined);
+const productColour = computed(() => !isEditing.value && typeof route.query.colour === 'string' ? route.query.colour : undefined);
 const candidates = computed(() =>
-  [...items.value, ...(product.value ? [product.value] : [])].sort((a, b) =>
+  [...items.value, ...products.value].sort((a, b) =>
     (b.recommendation?.priority || 0) - (a.recommendation?.priority || 0) ||
     (b.recommendation?.occasionScore || 0) - (a.recommendation?.occasionScore || 0) ||
     a.name.localeCompare(b.name),
@@ -84,23 +84,23 @@ const boardGroups = computed(() => {
     { key: "optional", slots: slots(["Jackets", "Accessories"], true) },
   ];
 });
-const pieceKey = piece => `${piece.source}:${piece.itemId || piece.productId}`;
+const pieceKey = piece => piece.source === 'store' ? `store:${storeVariantKey(piece)}` : `wardrobe:${piece.itemId}`;
 const photoKey = piece => `${pieceKey(piece)}:${piece.imageURL}`;
 function resetOutfit() {
   if (saving.value || busy.value) return;
   selectedIds.value = [];
-  selectedProduct.value = false;
+  selectedStoreKeys.value = [];
   error.value = "";
   notice.value = "";
 }
 const chosenCount = computed(
-  () => selectedIds.value.length + Number(selectedProduct.value),
+  () => selectedIds.value.length + selectedStoreKeys.value.length,
 );
 const requiredBasics = computed(() => {
   const chosen = items.value.filter((item) =>
     selectedIds.value.includes(item.itemId),
   );
-  if (selectedProduct.value && product.value) chosen.push(product.value);
+  chosen.push(...products.value.filter(isSelected));
   const categories = new Set(chosen.map((p) => p.category));
   const required = categories.has("Dresses")
     ? ["Dresses", "Shoes"]
@@ -183,243 +183,155 @@ const weatherSummary = computed(() => {
 });
 const weatherAdvice = computed(() => displayedWeather.value?.advice || []);
 
-let generation = 0,
-  scoreRequest = 0,
-  plannerLoad = 0,
-  loadedProductId;
-onBeforeUnmount(() => {
-  plannerLoad++;
-  generation++;
-  scoreRequest++;
-});
+let generation = 0, scoreRequest = 0, plannerLoad = 0;
+onBeforeUnmount(() => { plannerLoad++; generation++; scoreRequest++; });
 function isSelected(piece) {
-  return piece.source === "store"
-    ? selectedProduct.value
-    : selectedIds.value.includes(piece.itemId);
+  return piece.source === 'store' ? selectedStoreKeys.value.includes(storeVariantKey(piece)) : selectedIds.value.includes(piece.itemId);
 }
+const selectedStoreRefs = computed(() => products.value.filter(isSelected).map(piece => ({ productId: piece.productId, colour: piece.colour, size: piece.size })));
 async function assess() {
   const version = ++scoreRequest;
   selection.value = null;
-  if (!chosenCount.value) {
-    scoring.value = false;
-    return;
-  }
+  if (!chosenCount.value) { scoring.value = false; return; }
   scoring.value = true;
   try {
-    const result = await wardrobeApi(
-      "/selection",
-      send("POST", {
-        occasion: occasion.value,
-        date: date.value,
-        style: style.value,
-        itemIds: [...selectedIds.value],
-        ...(selectedProduct.value ? { productId: productId.value, productColour: productColour.value } : {}),
-      }),
-    );
+    const result = await wardrobeApi('/selection', send('POST', {
+      occasion: occasion.value, date: date.value, style: style.value,
+      itemIds: [...selectedIds.value], products: selectedStoreRefs.value,
+    }));
     if (version === scoreRequest) selection.value = result.selection;
-  } catch (e) {
-    if (version === scoreRequest) error.value = e.message;
-  } finally {
-    if (version === scoreRequest) scoring.value = false;
-  }
+  } catch (e) { if (version === scoreRequest) error.value = e.message; }
+  finally { if (version === scoreRequest) scoring.value = false; }
 }
 async function generate() {
   const version = ++generation;
-  weather.value = null;
-  scoreRequest++;
-  selection.value = null;
-  scoring.value = false;
-  busy.value = true;
-  error.value = "";
-  notice.value = "";
+  weather.value = null; scoreRequest++; selection.value = null; scoring.value = false;
+  busy.value = true; error.value = ''; notice.value = '';
   try {
-    const result = await wardrobeApi(
-      "/recommendations",
-      send("POST", {
-        occasion: occasion.value,
-        date: date.value,
-        style: style.value,
-        productId: productId.value,
-        productColour: productColour.value,
-      }),
-    );
+    const result = await wardrobeApi('/recommendations', send('POST', {
+      occasion: occasion.value, date: date.value, style: style.value,
+      products: candidateRefs.value.map(({ productId, colour, size }) => ({ productId, colour, size })),
+    }));
     if (version !== generation) return;
     items.value = result.items;
-    product.value = result.product;
+    products.value = result.products || (result.product ? [result.product] : []);
     weather.value = result.weather;
-    if (isEditing.value && selectedIds.value.some(id => !items.value.some(item => item.itemId === id)))
-      noteEdit("A saved piece is no longer in your wardrobe. Choose a replacement before updating.");
-    selectedIds.value = selectedIds.value.filter((id) =>
-      items.value.some((item) => item.itemId === id),
-    );
-    // Select the store item once on entry or when a different product is opened.
-    // Later filter changes preserve the user's choice to remove or replace it.
-    if (product.value && productId.value !== loadedProductId) {
-      selectedIds.value = selectedIds.value.filter(
-        (id) => !piecesConflict(items.value.find((item) => item.itemId === id), product.value),
-      );
-      selectedProduct.value = true;
-    } else if (!product.value) {
-      selectedProduct.value = false;
-    }
-    if (isEditing.value) {
-      const compatible = selectedProduct.value && product.value ? [product.value] : [];
-      const retained = [];
-      for (const itemId of selectedIds.value) {
-        const piece = items.value.find(item => item.itemId === itemId);
-        if (piece && !compatible.some(other => piecesConflict(other, piece))) {
-          compatible.push(piece);
-          retained.push(itemId);
-        } else noteEdit("Some saved pieces have changed categories. Choose one piece per category before updating.");
+    const unavailable = [...plannerProductsState.products.filter(piece => piece.missing), ...(result.unavailableProducts || [])];
+    unavailableStoreProducts.value = [...new Map(unavailable.map(piece => [storeVariantKey(piece), {
+      ...piece, name: plannerProductsState.products.find(saved => storeVariantKey(saved) === storeVariantKey(piece))?.name || piece.name,
+    }])).values()];
+    const previousCount = selectedIds.value.length + selectedStoreKeys.value.length;
+    selectedIds.value = selectedIds.value.filter(id => items.value.some(item => item.itemId === id));
+    selectedStoreKeys.value = selectedStoreKeys.value.map(key => {
+      const ref = candidateRefs.value.find(piece => storeVariantKey(piece) === key);
+      return products.value.find(piece => storeVariantKey(piece) === key || ref && !ref.colour && piece.productId === ref.productId && (piece.size || '') === (ref.size || ''));
+    }).filter(Boolean).map(storeVariantKey);
+    const compatible = [], owned = [], store = [];
+    for (const piece of [...products.value.filter(isSelected), ...items.value.filter(isSelected)]) {
+      if (!compatible.some(other => piecesConflict(other, piece))) {
+        compatible.push(piece);
+        if (piece.source === 'store') store.push(storeVariantKey(piece)); else owned.push(piece.itemId);
       }
-      selectedIds.value = retained;
     }
-    loadedProductId = productId.value;
+    selectedIds.value = owned; selectedStoreKeys.value = store;
+    if (previousCount !== owned.length + store.length) noteEdit('Some selected pieces are unavailable or have changed categories. Choose replacements before saving.');
     await assess();
     return true;
-  } catch (e) {
-    if (version === generation) error.value = e.message;
-  } finally {
-    if (version === generation) busy.value = false;
-  }
+  } catch (e) { if (version === generation) error.value = e.message; }
+  finally { if (version === generation) busy.value = false; }
 }
 function piecesConflict(other, piece) {
   return other?.category === piece.category ||
-    (piece.category === "Dresses" && ["Tops", "Bottoms"].includes(other?.category)) ||
-    (["Tops", "Bottoms"].includes(piece.category) && other?.category === "Dresses");
+    (piece.category === 'Dresses' && ['Tops', 'Bottoms'].includes(other?.category)) ||
+    (['Tops', 'Bottoms'].includes(piece.category) && other?.category === 'Dresses');
 }
 function togglePiece(piece) {
   if (saving.value || busy.value) return;
-  error.value = "";
-  notice.value = "";
+  error.value = ''; notice.value = '';
   if (isSelected(piece)) {
-    if (piece.source === "store") selectedProduct.value = false;
-    else
-      selectedIds.value = selectedIds.value.filter((id) => id !== piece.itemId);
+    if (piece.source === 'store') selectedStoreKeys.value = selectedStoreKeys.value.filter(key => key !== storeVariantKey(piece));
+    else selectedIds.value = selectedIds.value.filter(id => id !== piece.itemId);
     return;
   }
-  // Choosing another item in the same slot replaces only that earlier choice.
-  const conflict = (other) => piecesConflict(other, piece);
-  selectedIds.value = selectedIds.value.filter(
-    (id) => !conflict(items.value.find((item) => item.itemId === id)),
-  );
-  if (selectedProduct.value && product.value && conflict(product.value))
-    selectedProduct.value = false;
-  if (piece.source === "store") selectedProduct.value = true;
+  selectedIds.value = selectedIds.value.filter(id => !piecesConflict(items.value.find(item => item.itemId === id), piece));
+  selectedStoreKeys.value = selectedStoreKeys.value.filter(key => !piecesConflict(products.value.find(item => storeVariantKey(item) === key), piece));
+  if (piece.source === 'store') selectedStoreKeys.value = [...selectedStoreKeys.value, storeVariantKey(piece)];
   else selectedIds.value = [...selectedIds.value, piece.itemId];
 }
 async function save() {
-  if (!chosenCount.value) {
-    error.value = "Use at least one piece before saving an outfit.";
-    return;
-  }
-  if (!name.value.trim()) {
-    error.value = "Enter an outfit name before saving.";
-    return;
-  }
-  if (!canSave.value) {
-    error.value =
-      "Choose shoes and either a dress or a top and bottom before saving.";
-    return;
-  }
-  saving.value = true;
-  error.value = "";
-  const version = plannerLoad;
+  if (!chosenCount.value) { error.value = 'Use at least one piece before saving an outfit.'; return; }
+  if (!name.value.trim()) { error.value = 'Enter an outfit name before saving.'; return; }
+  if (!canSave.value) { error.value = 'Choose shoes and either a dress or a top and bottom before saving.'; return; }
+  saving.value = true; error.value = ''; const version = plannerLoad;
   try {
-    await wardrobeApi(
-      isEditing.value ? `/outfits/${encodeURIComponent(editOutfitId.value)}` : "/outfits",
-      send(isEditing.value ? "PUT" : "POST", {
-        name: name.value,
-        occasion: occasion.value,
-        date: date.value,
-        itemIds: [...selectedIds.value],
-        ...(selectedProduct.value ? { productId: productId.value, productColour: productColour.value } : {}),
-      }),
-    );
-    if (version === plannerLoad) await router.push({ name: "saved-outfits" });
-  } catch (e) {
-    error.value = e.message;
-  } finally {
-    saving.value = false;
-  }
+    await wardrobeApi(isEditing.value ? `/outfits/${encodeURIComponent(editOutfitId.value)}` : '/outfits', send(isEditing.value ? 'PUT' : 'POST', {
+      name: name.value, occasion: occasion.value, date: date.value,
+      itemIds: [...selectedIds.value], products: selectedStoreRefs.value,
+    }));
+    if (version === plannerLoad) await router.push({ name: 'saved-outfits' });
+  } catch (e) { if (version === plannerLoad) error.value = e.message; }
+  finally { if (version === plannerLoad) saving.value = false; }
 }
 async function loadPlanner() {
   const version = ++plannerLoad;
-  initialized.value = false;
-  generation++;
-  scoreRequest++;
-  loading.value = true;
-  busy.value = false;
-  scoring.value = false;
-  error.value = "";
-  editNotices.value = [];
-  loadedOutfitId.value = null;
-  editStorePiece.value = null;
-  loadedProductId = undefined;
-  selectedIds.value = [];
-  selectedProduct.value = false;
-  selection.value = null;
-  items.value = [];
-  product.value = null;
-  weather.value = null;
-  name.value = "";
-  occasion.value = "Presentation";
-  date.value = today();
-  style.value = "";
-  search.value = "";
-  category.value = "";
+  initialized.value = false; generation++; scoreRequest++;
+  loading.value = true; busy.value = false; scoring.value = false; error.value = '';
+  editNotices.value = []; loadedOutfitId.value = null; editStorePieces.value = [];
+  selectedIds.value = []; selectedStoreKeys.value = []; selection.value = null;
+  items.value = []; products.value = []; candidateRefs.value = []; unavailableStoreProducts.value = [];
+  weather.value = null; name.value = ''; occasion.value = 'Presentation'; date.value = today(); style.value = '';
+  search.value = ''; category.value = '';
   try {
-    if (isEditing.value) {
-      const result = await wardrobeApi(`/outfits/${encodeURIComponent(editOutfitId.value)}`);
-      if (version !== plannerLoad) return;
-      const outfit = result.outfit;
-      name.value = outfit.name;
-      occasion.value = normalizeOccasion(outfit.occasion);
-      if (outfit.eventDate && outfit.eventDate >= today()) date.value = outfit.eventDate;
-      else if (outfit.eventDate) noteEdit("This outfit’s planned date has passed. The date is now set to today; you can choose another date.");
-      const missing = outfit.pieces.filter(piece => piece.missing);
-      if (missing.length) noteEdit(`These pieces are no longer available and were not added: ${missing.map(piece => piece.name).join(", ")}. Choose replacements before updating.`);
-      selectedIds.value = outfit.pieces.filter(piece => piece.source === "wardrobe" && !piece.missing).map(piece => piece.itemId);
-      editStorePiece.value = outfit.pieces.find(piece => piece.source === "store" && !piece.missing) || null;
-      selectedProduct.value = !!editStorePiece.value;
-      loadedProductId = editStorePiece.value?.productId;
-    }
-    // Ignore filter/selection watchers while restoring the saved outfit.
-    await nextTick();
+    await hydratePlannerProducts(true);
     if (version !== plannerLoad) return;
+    if (isEditing.value) {
+      const { outfit } = await wardrobeApi(`/outfits/${encodeURIComponent(editOutfitId.value)}`);
+      if (version !== plannerLoad) return;
+      name.value = outfit.name; occasion.value = normalizeOccasion(outfit.occasion);
+      if (outfit.eventDate && outfit.eventDate >= today()) date.value = outfit.eventDate;
+      else if (outfit.eventDate) noteEdit('This outfit’s planned date has passed. The date is now set to today; you can choose another date.');
+      const missing = outfit.pieces.filter(piece => piece.missing);
+      if (missing.length) noteEdit(`These pieces are no longer available and were not added: ${missing.map(piece => piece.name).join(', ')}. Choose replacements before updating.`);
+      selectedIds.value = outfit.pieces.filter(piece => piece.source === 'wardrobe' && !piece.missing).map(piece => piece.itemId);
+      editStorePieces.value = outfit.pieces.filter(piece => piece.source === 'store' && !piece.missing);
+      selectedStoreKeys.value = editStorePieces.value.map(storeVariantKey);
+    }
+    const legacy = !isEditing.value && productId.value ? [{ productId: productId.value, colour: productColour.value || '', size: typeof route.query.size === 'string' ? route.query.size : '' }] : [];
+    candidateRefs.value = [...new Map([...plannerProductsState.products.filter(piece => !piece.missing), ...editStorePieces.value, ...legacy].map(piece => [storeVariantKey(piece), piece])).values()];
+    // Keep older shared links working; the new Add button only collects candidates.
+    if (legacy.length) selectedStoreKeys.value = legacy.map(storeVariantKey);
+    await nextTick(); if (version !== plannerLoad) return;
     initialized.value = true;
     const success = await generate();
     if (version === plannerLoad && success && isEditing.value) loadedOutfitId.value = editOutfitId.value;
-  } catch (e) {
-    if (version === plannerLoad) error.value = e.message;
-  } finally {
-    if (version === plannerLoad) loading.value = false;
-  }
+  } catch (e) { if (version === plannerLoad) error.value = e.message; }
+  finally { if (version === plannerLoad) loading.value = false; }
 }
 function retryPlanner() {
-  if (isEditing.value && loadedOutfitId.value !== editOutfitId.value) loadPlanner();
+  if (!initialized.value || isEditing.value && loadedOutfitId.value !== editOutfitId.value) loadPlanner();
   else generate();
 }
-function removeEditStoreSuggestion() {
-  if (saving.value || busy.value) return;
-  editStorePiece.value = null;
-  selectedProduct.value = false;
-  product.value = null;
+async function removeStoreCandidate(piece) {
+  if (saving.value || busy.value || plannerProductsState.pending) return;
+  const version = plannerLoad, key = storeVariantKey(piece);
+  error.value = '';
+  try {
+    if (plannerProductsState.products.some(item => storeVariantKey(item) === key)) await removePlannerProduct(key);
+    if (version !== plannerLoad) return;
+    candidateRefs.value = candidateRefs.value.filter(item => storeVariantKey(item) !== key);
+    products.value = products.value.filter(item => storeVariantKey(item) !== key);
+    unavailableStoreProducts.value = unavailableStoreProducts.value.filter(item => storeVariantKey(item) !== key);
+    selectedStoreKeys.value = selectedStoreKeys.value.filter(item => item !== key);
+  } catch (e) { if (version === plannerLoad && e.code !== 'ACCOUNT_CHANGED') error.value = e.message; }
 }
 onMounted(loadPlanner);
-watch(editOutfitId, loadPlanner, { flush: "sync" });
-watch([occasion, date, style, productId, productColour], (values, previous) => {
-  if (!initialized.value) return;
-  if (values[3] !== previous[3]) selectedProduct.value = false;
-  generate();
+watch([editOutfitId, productId, productColour, () => route.query.size], loadPlanner);
+watch([occasion, date, style], () => { if (initialized.value) generate(); });
+watch([selectedIds, selectedStoreKeys], () => { if (initialized.value && !busy.value) assess(); }, { deep: true });
+watch(() => plannerProductsState.ownerId, owner => {
+  if (owner) loadPlanner();
+  else { plannerLoad++; generation++; scoreRequest++; initialized.value = false; items.value = []; products.value = []; selectedIds.value = []; selectedStoreKeys.value = []; selection.value = null; }
 });
-watch(
-  [selectedIds, selectedProduct],
-  () => {
-    if (initialized.value && !busy.value) assess();
-  },
-  { deep: true },
-);
 </script>
 <template>
   <section ref="plannerRoot" class="wd-page wd-studio wd-weather-studio">
@@ -485,6 +397,16 @@ watch(
       </label>
     </div>
 
+    <div v-if="!loading && (!isEditing || loadedOutfitId === editOutfitId)" class="wd-store-product-strips" aria-label="Products added from stores">
+      <div v-for="piece in products" :key="`selected-store:${storeVariantKey(piece)}`" class="wd-product-note wd-selected-store-note" role="status">
+        <div class="wd-selected-store-copy">
+          <span>Added from store: <strong>{{ piece.name }}</strong></span>
+          <span class="wd-selected-store-details">{{ piece.businessName || 'Store pick' }} · S${{ Number(piece.price).toFixed(2) }}<template v-if="piece.colour"> · {{ piece.colour }}</template><template v-if="piece.size"> · Size {{ piece.size }}</template></span>
+        </div>
+        <button type="button" class="wd-remove-store" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || busy || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="15" />Remove from planner</button>
+      </div>
+    </div>
+
     <nav class="wd-mobile-steps" aria-label="Planner sections">
       <a href="#wd-picker-title">Choose pieces</a>
       <a href="#wd-board-title">Outfit board</a>
@@ -497,11 +419,10 @@ watch(
     <p v-for="message in editNotices" :key="message" class="wd-weather-note" role="status">{{ message }}</p>
     <p v-if="loading || busy" role="status" class="wd-studio-loading">Finding recommendations for your wardrobe…</p>
     <template v-else-if="!isEditing || loadedOutfitId === editOutfitId">
-      <p v-if="product" class="wd-product-note">
-        Styling with <strong>{{ product.name }}</strong> · Store pick · S${{ Number(product.price).toFixed(2) }}
-        <button v-if="isEditing" type="button" class="wd-remove-store ms-2" :disabled="saving" @click="removeEditStoreSuggestion"><span aria-hidden="true">×</span> Remove store suggestion</button>
-        <RouterLink v-else class="wd-remove-store" :to="{ name: 'outfit-match' }"><span aria-hidden="true">×</span> Remove store suggestion</RouterLink>
-      </p>
+      <div v-for="piece in unavailableStoreProducts" :key="storeVariantKey(piece)" class="wd-weather-note" role="status">
+        {{ piece.name }}{{ piece.colour ? ` · ${piece.colour}` : '' }}{{ piece.size ? ` · Size ${piece.size}` : '' }} is no longer available.
+        <button type="button" class="wd-remove-store" :disabled="saving || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="14" /> Remove from planner</button>
+      </div>
       <div v-if="!candidates.length" class="wd-empty">
         <span>✿</span>
         <h2>Your next outfit starts with a few pieces</h2>
@@ -530,14 +451,18 @@ watch(
           <p class="wd-studio-available" role="status">{{ availablePieces.length }} {{ availablePieces.length === 1 ? 'piece' : 'pieces' }} available</p>
           <TransitionGroup v-if="availablePieces.length" name="wd-piece" tag="div" class="wd-picker-grid">
             <ClothingCard v-for="(piece, index) in availablePieces" :key="pieceKey(piece)" :data-piece-key="pieceKey(piece)" :item="piece" :index="index">
+              <template #overlay>
+                <div v-if="piece.recommendation?.label" class="wd-photo-recommendations">
+                  <span v-if="piece.recommendation.kind === 'occasion'" class="wd-piece-recommendation"><CommunityIcon name="check" :size="13" />{{ piece.recommendation.label }}</span>
+                  <span v-if="piece.recommendation.styleMatch || piece.recommendation.kind === 'style'" class="wd-piece-recommendation is-style"><CommunityIcon name="check" :size="13" />Matches your style</span>
+                </div>
+              </template>
               <p class="wd-item-style">{{ piece.style?.join(" · ") || "Style not tagged" }}</p>
-              <p v-if="piece.recommendation?.label" class="wd-piece-recommendation" :class="{ 'is-style': piece.recommendation?.kind === 'style' }">
-                <CommunityIcon name="check" :size="13" />{{ piece.recommendation.label }}
-              </p>
-              <p v-if="piece.source === 'store'" class="wd-source-caption">Store pick · S${{ Number(piece.price).toFixed(2) }}</p>
+              <p v-if="piece.source === 'store'" class="wd-source-caption">{{ piece.businessName || 'Store pick' }} · S${{ Number(piece.price).toFixed(2) }}<span v-if="piece.size"> · Size {{ piece.size }}</span></p>
               <button type="button" class="wd-use-piece" :aria-label="`Use this piece: ${piece.name}`" :disabled="saving" @click="placePiece(piece, $event)">
                 <CommunityIcon name="plus" :size="16" />Use this piece
               </button>
+              <button v-if="piece.source === 'store'" type="button" class="wd-remove-store wd-remove-planner-product" :aria-label="`Remove ${piece.name} from planner`" :disabled="saving || plannerProductsState.pending > 0" @click="removeStoreCandidate(piece)"><CommunityIcon name="close" :size="13" />Remove from planner</button>
             </ClothingCard>
           </TransitionGroup>
           <div v-else class="wd-studio-picker-empty">
@@ -575,7 +500,7 @@ watch(
                         :disabled="saving" @click="returnPiece(slot.piece, $event)"><CommunityIcon name="close" :size="18" /></button>
                     </div>
                     <span v-if="slot.category === 'Dresses'" class="wd-board-dress-note">Covers top + bottom</span>
-                    <p v-if="slot.piece.source === 'store'" class="wd-board-store-note">Store pick · S${{ Number(slot.piece.price).toFixed(2) }}</p>
+                    <p v-if="slot.piece.source === 'store'" class="wd-board-store-note">{{ slot.piece.businessName || 'Store pick' }} · {{ slot.piece.colour }}<span v-if="slot.piece.size"> · Size {{ slot.piece.size }}</span> · S${{ Number(slot.piece.price).toFixed(2) }}</p>
                   </div>
                   <div v-else key="empty" class="wd-board-placeholder">
                     <CommunityIcon :name="slot.category === 'Accessories' ? 'tag' : 'hanger'" :size="26" />

@@ -3,6 +3,9 @@ const piece = new mongoose.Schema(
   {
     itemId: String,
     productId: String,
+    size: String,
+    businessId: String,
+    businessName: String,
     name: String,
     category: String,
     colour: String,

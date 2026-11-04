@@ -82,6 +82,12 @@ function memoryModel(Model) {
       for (const [key, value] of Object.entries(update.$set || {})) doc.set(key, value);
       for (const [key, value] of Object.entries(update.$inc || {})) doc.set(key, (doc.get(key) || 0) + value);
       for (const key of Object.keys(update.$unset || {})) doc.set(key, undefined);
+      for (const [key, value] of Object.entries(update.$addToSet || {})) {
+        const entries = doc.get(key) || [];
+        if (!entries.some(entry => matches(entry, value))) doc.set(key, [...entries, value]);
+      }
+      for (const [key, value] of Object.entries(update.$pull || {}))
+        doc.set(key, (doc.get(key) || []).filter(entry => !matches(entry, value)));
       await doc.save(); return doc;
     },
     async updateMany(filter, update) {

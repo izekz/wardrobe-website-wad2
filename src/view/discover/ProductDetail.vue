@@ -3,14 +3,18 @@ import '../../assets/styles/discover.css'
 import { catalogApi, money } from '../../services/catalogApi'
 import { authState } from '../../services/authService'
 import { isLiked, toggleLike, addToCart, shopState } from '../../services/shopService'
+import { plannerProductsState, hydratePlannerProducts, addPlannerProduct, storeVariantKey } from '../../services/wardrobeService'
 import CommunityIcon from '../../components/CommunityIcon.vue'
 import RequestSuggestionAction from '../../components/RequestSuggestionAction.vue'
 import SkipFeedback from '../../components/SkipFeedback.vue'
 import ReportDialog from '../../components/ReportDialog.vue'
 export default {
   components:{CommunityIcon,SkipFeedback,RequestSuggestionAction,ReportDialog},
-  data(){return{reportOpen:false,product:null,business:null,loading:true,error:'',size:'',colour:'',shoppingBusy:false,skipping:false,toast:'',cartSelectionNotice:'',loadVersion:0,activeImage:0,quantity:1}},
-  computed:{saved(){return !!this.product&&isLiked(this.product.productId)},shoppingReady(){return shopState.ready&&!shopState.loading&&!shopState.pending},
+  data(){return{reportOpen:false,product:null,business:null,loading:true,error:'',size:'',colour:'',shoppingBusy:false,skipping:false,toast:'',cartSelectionNotice:'',plannerBusy:false,plannerMessage:'',plannerError:'',loadVersion:0,activeImage:0,quantity:1}},
+  computed:{plannerState(){return plannerProductsState},
+    plannerAdded(){return !!this.product&&plannerProductsState.products.some(piece=>piece.available&&storeVariantKey(piece)===storeVariantKey({productId:this.product.productId,colour:this.colour,size:this.size}))},
+    canPlan(){return this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)},
+    saved(){return !!this.product&&isLiked(this.product.productId)},shoppingReady(){return shopState.ready&&!shopState.loading&&!shopState.pending},
     availableColours(){return this.product?.availableColours||this.product?.colours||(this.product?.colour?[this.product.colour]:[])}, isShopper(){return authState.user?.role==='consumer'}, isSuggestion(){return typeof this.$route.query.requestId==='string'&&typeof this.$route.query.responseId==='string'}, wardrobeRoute(){return this.$router.getRoutes().find(r=>['outfit-match','wardrobe-match','style-with-wardrobe'].includes(r.name))},
     gallery(){if(!this.product)return[];return[{src:this.product.imageURL,label:'Product view'},...(this.product.sizeImageURL?[{src:this.product.sizeImageURL,label:'Size guide'}]:[])]}, sizeLeft(){return s=>this.product?.sizeStock?(this.product.sizeStock[s]||0):(this.product?.stock||0)}, selectedStock(){if(!this.product)return 0;return this.size?this.sizeLeft(this.size):this.product.stock},
     canCart(){return this.shoppingReady&&this.isShopper&&this.selectedStock>0&&(!this.product.sizes?.length||this.size)&&(!this.availableColours.length||this.colour)}
@@ -37,7 +41,7 @@ watch: {
   },
 },
   methods:{money,
-    async load(){const v=++this.loadVersion;this.loading=true;this.error='';this.activeImage=0;this.cartSelectionNotice='';try{const r=await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`);if(v!==this.loadVersion)return;this.product=r.product;this.business=r.business;this.restoreSelections()}catch(e){if(v===this.loadVersion)this.error=e.message}finally{if(v===this.loadVersion)this.loading=false}},
+    async load(){const v=++this.loadVersion;this.loading=true;this.error='';this.activeImage=0;this.cartSelectionNotice='';this.plannerMessage='';this.plannerError='';try{const r=await catalogApi(`/products/${encodeURIComponent(this.$route.params.productId)}`);if(v!==this.loadVersion)return;this.product=r.product;this.business=r.business;this.restoreSelections();if(this.isShopper)void hydratePlannerProducts().catch(()=>{})}catch(e){if(v===this.loadVersion)this.error=e.message}finally{if(v===this.loadVersion)this.loading=false}},
     restoreSelections() {
       const sizes = this.product.sizes || []
       this.colour = this.availableColours.length === 1 ? this.availableColours[0] : ''
@@ -73,7 +77,16 @@ watch: {
     },
     async save(){if(this.shoppingBusy)return;this.shoppingBusy=true;try{const liked=await toggleLike(this.product.productId);this.flash(liked?'Added to Likes.':'Removed from Likes.')}catch(e){if(e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}finally{this.shoppingBusy=false}},
     async addCart(){if(this.shoppingBusy||!this.canCart)return;this.shoppingBusy=true;try{await addToCart(this.product,{size:this.size,colour:this.colour,quantity:this.quantity});this.flash('Added to cart.')}catch(e){if(e.code!=='ACCOUNT_CHANGED')this.flash(e.message)}finally{this.shoppingBusy=false}},
-    styleWithWardrobe(){if(this.availableColours.length&&!this.colour){this.flash('Choose a colour first.');return}this.$router.push({name:this.wardrobeRoute.name,query:{productId:this.product.productId,...(this.colour?{colour:this.colour}:{})}})},
+    async addToPlanner(){
+      if(this.plannerBusy||!this.canPlan)return;
+      const version=this.loadVersion,productId=this.product.productId,colour=this.colour,size=this.size;
+      this.plannerBusy=true;this.plannerMessage='';this.plannerError='';
+      try{
+        await addPlannerProduct(this.product,{colour,size});
+        if(version===this.loadVersion&&this.product?.productId===productId&&this.colour===colour&&this.size===size)this.plannerMessage='Added to your planner.';
+      }catch(error){if(version===this.loadVersion&&error.code!=='ACCOUNT_CHANGED')this.plannerError=error.message}
+      finally{this.plannerBusy=false}
+    },
     flash(m){this.toast=m;clearTimeout(this.toastTimer);this.toastTimer=setTimeout(()=>this.toast='',2600)},
     async skipped(){this.skipping=false;try{const next=(await catalogApi('/products?forYou=true')).products.find(p=>p.productId!==this.product.productId);if(next){await this.$router.push({name:'discover-product',params:{productId:next.productId}});this.flash('Thanks! We will adjust your recommendations!');return}}catch{}await this.$router.push({name:'discover'})}
   },beforeUnmount(){clearTimeout(this.toastTimer)}
@@ -126,7 +139,13 @@ watch: {
   @close="reportOpen = false"
 />
   <div v-if="isShopper&&!isSuggestion" class="disc-buy-row"><select v-model.number="quantity" aria-label="Quantity"><option v-for="n in Math.min(selectedStock,10)" :key="n" :value="n">Qty {{n}}</option></select><button class="community-btn disc-add-cart" :disabled="!canCart||shoppingBusy" @click="addCart">Add to cart</button></div>
-  <div class="disc-actions"><button v-if="wardrobeRoute&&!isSuggestion" class="community-btn community-btn-outline" @click="styleWithWardrobe"><CommunityIcon name="hanger" :size="21"/>Style with my wardrobe</button><button class="community-btn community-btn-outline" :aria-pressed="saved" :disabled="!shoppingReady||shoppingBusy" @click="save"><svg width="20" height="20" viewBox="0 0 24 24" :fill="saved?'currentColor':'none'" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>{{saved?'Liked':'Add to Likes'}}</button></div>
+  <div class="disc-actions"><div v-if="wardrobeRoute&&isShopper&&!isSuggestion" class="disc-planner-action">
+    <button type="button" class="community-btn community-btn-outline" :disabled="!canPlan||plannerBusy||plannerState.pending>0||plannerAdded" @click="addToPlanner"><CommunityIcon name="hanger" :size="21"/>{{plannerBusy?'Adding…':plannerAdded?'Added to Outfit Planner':'Add to Outfit Planner'}}</button>
+    <p class="community-muted small mb-0 mt-2">See how this piece works with clothes you already own.</p>
+    <p v-if="plannerMessage" role="status" class="small mt-2 mb-0">{{plannerMessage}}</p>
+    <p v-if="plannerError" role="alert" class="community-error small mt-2 mb-0">{{plannerError}}</p>
+    <RouterLink v-if="plannerState.products.length" :to="{name:wardrobeRoute.name}" class="disc-view-planner">View planner <CommunityIcon name="arrow" :size="15"/></RouterLink>
+  </div><button class="community-btn community-btn-outline" :aria-pressed="saved" :disabled="!shoppingReady||shoppingBusy" @click="save"><svg width="20" height="20" viewBox="0 0 24 24" :fill="saved?'currentColor':'none'" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>{{saved?'Liked':'Add to Likes'}}</button></div>
 
 
   <div v-if="product.reasons?.length" class="disc-why"><h2><span>✦</span> Why this was picked for you</h2><ul><li v-for="reason in product.reasons" :key="reason"><span><CommunityIcon name="check"/></span>{{reason}}</li></ul></div>
@@ -137,7 +156,10 @@ watch: {
 </section></template>
 
 <style scoped>
-<style scoped>
+.disc-planner-action{min-width:0;flex:1}
+.disc-planner-action>.community-btn{width:100%}
+.disc-view-planner{display:inline-flex;align-items:center;gap:8px;margin-top:10px;text-decoration:underline!important;text-underline-offset:3px;font-size:13px}
+
 .disc-sizes button.size-sold-out {
   display: inline-grid;
   place-items: center;

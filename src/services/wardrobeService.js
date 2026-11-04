@@ -1,3 +1,4 @@
+import { reactive, watch } from "vue";
 import { authState } from "./authService";
 export const categories = [
   "Tops",
@@ -67,18 +68,17 @@ export async function wardrobeApi(path, options = {}) {
       ...options,
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
       },
       signal: controller.signal,
     });
     const result = await response.json().catch(() => null);
-    if (response.status === 401) {
+    if (response.status === 401 && (!options.headers?.['X-Planner-User'] || options.headers['X-Planner-User'] === String(authState.user?.id))) {
       authState.user = null;
       window.dispatchEvent(new Event("auth:expired"));
     }
     if (!response.ok)
-      throw new Error(
-        result?.message || "Unable to complete the request. Please try again.",
-      );
+      throw Object.assign(new Error(result?.message || "Unable to complete the request. Please try again."), { code: result?.code });
     if (!result) throw new Error("Unexpected server response.");
     return result;
   } catch (error) {
@@ -127,3 +127,73 @@ export function weatherEmoji(weather) {
   if (condition.includes("snow")) return "🌨️";
   return "☀️";
 }
+
+// Private account-owned products collected for planning, independent of cart and likes.
+export const plannerProductsState = reactive({ ownerId: null, products: [], ready: false, loading: false, pending: 0, error: '' });
+export const storeVariantKey = piece => `${piece.productId}:${piece.colour || ''}:${piece.size || ''}`;
+let plannerGeneration = 0, plannerHydration = null, plannerQueue = Promise.resolve();
+const plannerOwnerId = () => authState.user?.role === 'consumer' ? String(authState.user.id) : null;
+const plannerContext = () => ({ owner: plannerProductsState.ownerId, generation: plannerGeneration });
+const samePlannerAccount = ctx => ctx.owner && ctx.owner === plannerOwnerId() && ctx.owner === plannerProductsState.ownerId && ctx.generation === plannerGeneration;
+const plannerChanged = () => Object.assign(new Error('Your signed-in account changed. Please try again.'), { code: 'ACCOUNT_CHANGED' });
+watch(plannerOwnerId, owner => {
+  plannerGeneration++;
+  plannerHydration = null;
+  plannerQueue = Promise.resolve();
+  Object.assign(plannerProductsState, { ownerId: owner, products: [], ready: false, loading: false, pending: 0, error: '' });
+}, { immediate: true, flush: 'sync' });
+async function plannerRequest(path, options, ctx) {
+  if (!samePlannerAccount(ctx)) throw plannerChanged();
+  let result;
+  try { result = await wardrobeApi('/planner-products' + path, { ...options, headers: { 'X-Planner-User': ctx.owner } }); }
+  catch (error) {
+    if (!samePlannerAccount(ctx)) throw plannerChanged();
+    if (error.code === 'ACCOUNT_CHANGED') {
+      authState.user = null;
+      window.dispatchEvent(new Event('auth:expired'));
+    }
+    throw error;
+  }
+  if (!samePlannerAccount(ctx)) throw plannerChanged();
+  if (result.userId !== ctx.owner || !Array.isArray(result.products)) throw new Error('Unexpected planner response. Please refresh and try again.');
+  plannerProductsState.products = result.products;
+  plannerProductsState.ready = true;
+  return result;
+}
+export function hydratePlannerProducts(force = false) {
+  if (!plannerOwnerId()) return Promise.resolve();
+  if (plannerHydration) return plannerHydration;
+  if (plannerProductsState.pending) return plannerQueue.then(() => hydratePlannerProducts(force));
+  if (plannerProductsState.ready && !force) return Promise.resolve();
+  const ctx = plannerContext();
+  plannerProductsState.loading = true;
+  plannerProductsState.error = '';
+  const task = plannerRequest('', {}, ctx).catch(error => {
+    if (samePlannerAccount(ctx)) plannerProductsState.error = error.message;
+    throw error;
+  }).finally(() => {
+    if (plannerHydration === task) plannerHydration = null;
+    if (samePlannerAccount(ctx)) plannerProductsState.loading = false;
+  });
+  plannerHydration = task;
+  return task;
+}
+function mutatePlanner(path, options) {
+  const ctx = plannerContext();
+  const task = plannerQueue.catch(() => {}).then(async () => {
+    if (!samePlannerAccount(ctx)) throw plannerChanged();
+    await hydratePlannerProducts();
+    if (!samePlannerAccount(ctx)) throw plannerChanged();
+    plannerProductsState.pending++;
+    plannerProductsState.error = '';
+    try { return await plannerRequest(path, options, ctx); }
+    catch (error) { if (samePlannerAccount(ctx)) plannerProductsState.error = error.message; throw error; }
+    finally { if (samePlannerAccount(ctx)) plannerProductsState.pending--; }
+  });
+  plannerQueue = task.catch(() => {});
+  return task;
+}
+export function addPlannerProduct(product, { colour = '', size = '' } = {}) {
+  return mutatePlanner('', send('POST', { productId: product.productId, colour, size }));
+}
+export function removePlannerProduct(key) { return mutatePlanner('/' + encodeURIComponent(key), { method: 'DELETE' }); }

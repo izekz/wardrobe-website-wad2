@@ -12,6 +12,9 @@ function createWardrobeRouter(models, weatherProvider, colourProvider) {
     res.set("Cache-Control", "no-store");
     next();
   });
+  router.get("/planner-products", c.plannerProducts);
+  router.post("/planner-products", trustedBrowser, c.addPlannerProduct);
+  router.delete("/planner-products/:key", trustedBrowser, c.removePlannerProduct);
   router.get("/items", c.list);
   router.post("/items", trustedBrowser, c.create);
   router.get("/items/:id/image", c.image);

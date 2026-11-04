@@ -1575,9 +1575,11 @@
 .wd-studio .wd-picker-grid .wd-tags span { padding: 3px 6px; font-size: 10px; border-radius: 3px; }
 .wd-studio .wd-picker-grid .wd-item-style { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #756575; overflow-wrap: anywhere; }
 .wd-studio .wd-picker-grid .wd-source-caption { font-size: 11px; margin: 7px 0 0; color: #594057; }
-.wd-piece-recommendation { display: flex; align-items: start; gap: 4px; font-size: 10px; font-weight: 600; color: #2d6546; line-height: 1.5; margin: 9px 0 0; }
-.wd-piece-recommendation svg { flex-shrink: 0; margin-top: 1px; }
-.wd-piece-recommendation.is-style { color: #72567c; }
+.wd-studio .wd-picker-grid .wd-photo { position: relative; }
+.wd-photo-recommendations { position: absolute; inset: 8px 8px auto; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; pointer-events: none; }
+.wd-photo-recommendations .wd-piece-recommendation { display: inline-flex; align-items: flex-start; gap: 4px; max-width: 100%; padding: 5px 7px; border: 1px solid #a7c9b0; border-radius: 3px; background: #e5f3e7; color: #245a3b; font-size: 10px; font-weight: 600; line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
+.wd-photo-recommendations .wd-piece-recommendation svg { flex-shrink: 0; }
+.wd-photo-recommendations .wd-piece-recommendation.is-style { border-color: #cdb9db; background: #f0e7f8; color: #654279; }
 .wd-studio .wd-picker-grid .wd-use-piece { display: flex; width: 100%; justify-content: center; align-items: center; min-height: 42px; gap: 6px; padding: 9px 6px; font-size: 12px; border-radius: 3px; margin-top: 14px; background: #edf4ee; color: #2b5f41; border: 1px solid #c4d7c9; box-shadow: none; }
 .wd-studio .wd-picker-grid .wd-use-piece:hover:enabled { background: #dcebdd; border-color: #8eaf99; transform: none; }
 .wd-studio-picker-empty { display: grid; justify-items: center; text-align: center; padding: 50px 15px; color: #806c82; }
@@ -1778,11 +1780,25 @@
   .wd-weather-controls { display: none; }
 }
 
-.wd-selection-weather { border-top: 1px solid #e9e0e6; padding-top: 18px; margin: 22px 0; font-size: 12px; line-height: 1.65; color: #67576d; }
-.wd-selection-weather h3 { font: 600 13px Arial, Helvetica, sans-serif; color: #49364a; margin: 0 0 9px; }
+.wd-selection-weather { border-top: 1px solid #e9e0e6; padding-top: 18px; margin: 22px 0; font-size: 12px; line-height: 1.65; color: #28637b; }
+.wd-selection-weather h3 { font: 600 13px Arial, Helvetica, sans-serif; color: #235770; margin: 0 0 9px; }
 .wd-selection-weather p { margin: 6px 0; }
-.wd-selection-forecast { color: #49364a; font-weight: 600; }
+.wd-selection-forecast { color: #28637b; font-weight: 600; }
 .wd-selection-forecast > span { margin-right: 4px; }
-.wd-selection-forecast-date { font-size: 10px; color: #78677d; }
+.wd-selection-forecast-date { font-size: 10px; color: #48677b; }
 .wd-selection-weather ul { padding-left: 18px; margin: 10px 0 0; }
 .wd-selection-weather li + li { margin-top: 5px; }
+
+/* Store candidates stay separate from the shopping cart and selected outfit. */
+.wd-studio .wd-remove-planner-product{display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;color:#a02f46;border:0;padding:9px 0;margin-top:4px;font-size:10px;text-decoration:underline;text-underline-offset:3px}
+.wd-studio .wd-remove-planner-product:hover{color:#7b1c2e}
+.wd-studio .wd-board-store-note{overflow-wrap:anywhere;line-height:1.6}
+.wd-studio .wd-weather-note>.wd-remove-store{display:inline-flex;align-items:center;gap:5px;border:1px solid #e3b7c2;border-radius:3px;background:#fff7f7;color:#a02f46;padding:7px 10px;margin-left:8px;font-size:12px}
+
+/* Identify selected store pieces without removing their collected planner candidates. */
+.wd-studio .wd-selected-store-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin: 0 0 12px; border: 1px solid #ebc6cc; border-radius: 5px; background: #fbe8e9; color: #793447; }
+.wd-selected-store-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 14px; min-width: 0; overflow-wrap: anywhere; }
+.wd-selected-store-details { font-size: 12px; line-height: 1.6; }
+.wd-studio .wd-selected-store-note .wd-remove-store { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; margin: 0; flex-shrink: 0; border-color: #c8687d; background: #b3334b; color: #fff; }
+.wd-studio .wd-selected-store-note .wd-remove-store:hover:enabled { background: #91253a; }
+.wd-studio .wd-selected-store-note .wd-remove-store:disabled { opacity: .55; cursor: wait; }
