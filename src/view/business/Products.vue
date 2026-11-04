@@ -69,8 +69,10 @@ export default {
     },
     toggleHidden(product) {
       const status = product.status === 'active' ? 'hidden' : 'active'
-      const { name, price, style, category, occasions, sizes, stock, description } = product
-      return this.act(product, 'hide', null, () => businessApi(`/products/${product.productId}`, sendJson('PUT', { name, price, style, category, occasions, sizes, stock, description, status })),
+      const { name, price, style, category, colours, material, occasions, sizes, stock, sizeStock, description } = product
+      // Person 4: send stock per size back unchanged (older listings send sizes + one stock).
+      const sizing = sizeStock ? { sizeStock } : { sizes, stock }
+      return this.act(product, 'hide', null, () => businessApi(`/products/${product.productId}`, sendJson('PUT', { name, price, style, category, colours, material: material || 'Not specified', occasions, ...sizing, description, status })),
         status === 'hidden' ? `“${name}” is hidden from the store.` : `“${name}” is showing in the store again.`)
     },
     remove(product) {
@@ -105,14 +107,16 @@ export default {
       <template v-else>
         <div class="biz-table-wrap">
           <table class="biz-table">
-            <thead><tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">Sizes</th><th scope="col">Stock</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+            <thead><tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">Stock per size</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
             <tbody>
               <tr v-if="!shown.length"><td colspan="6" class="biz-muted text-center py-4">No products match these filters.</td></tr>
               <tr v-for="product in shown" :key="product.productId">
                 <td><div class="biz-product-cell"><img :src="product.imageURL" :alt="product.name" loading="lazy" /><div><span>{{ product.name }}</span>
                   <div class="mt-1 d-flex gap-1"><span v-if="product.premium" class="biz-pill yellow">Premium</span><span v-if="product.boosted" class="biz-pill pink">Boosted</span></div></div></div></td>
                 <td>{{ money(product.price) }}</td>
-                <td><div class="biz-sizes"><span v-for="size in product.sizes" :key="size" class="biz-size">{{ size }}</span></div></td>
+                <td><div class="biz-sizes">
+                  <span v-for="size in product.sizes" :key="size" class="biz-size" :class="{ 'biz-bad': product.sizeStock && !product.sizeStock[size] }" :title="product.sizeStock ? `${product.sizeStock[size] || 0} left in ${size}` : 'Shared stock'">{{ size }}<template v-if="product.sizeStock"> · {{ product.sizeStock[size] || 0 }}</template></span>
+                </div><small v-if="!product.sizeStock" class="biz-muted">Shared stock. Edit to set per size.</small></td>
                 <td :class="{ 'biz-bad': product.stock === 0 }">{{ product.stock }}</td>
                 <td><span v-if="available(product)" class="biz-pill green"><span class="biz-dot"></span> Active</span>
                   <span v-else class="biz-pill grey" :title="product.status === 'hidden' ? 'Hidden from the store' : 'Out of stock'"><span class="biz-dot"></span> Unavailable</span></td>
@@ -150,3 +154,7 @@ export default {
     </template>
   </section>
 </template>
+
+<style scoped>
+.biz-size.biz-bad { background: #f9e1e6; color: #a0304f; text-decoration: line-through; }
+</style>

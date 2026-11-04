@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { badRequest, singaporeToday } = require('../communityValidation');
 const rules = require('../businessValidation');
 const { listedColours } = require('../services/listedColours');
+const { sizeStockMap } = require('../services/sizeStock');
 const { syncProductBoosts, remainingBoostMs } = require('../services/styleBoostAvailability');
 
 const defaultModels = {
@@ -67,7 +68,7 @@ function productJson(doc) {
   return {
     productId: String(doc._id), businessId: doc.businessId, businessName: doc.businessName,
     name: doc.name, price: doc.price, style: doc.style, category: doc.category,
-    occasions: doc.occasions, sizes: doc.sizes, stock: doc.stock, description: doc.description,
+    occasions: doc.occasions, sizes: doc.sizes, stock: doc.stock, sizeStock: sizeStockMap(doc), description: doc.description,
     colours, colour: colours.length === 1 ? colours[0] : null, material: doc.material || null,
     availableColours: colours,
     status: doc.status, boosted: doc.boosted, boostedUntil: doc.boostedUntil || null,

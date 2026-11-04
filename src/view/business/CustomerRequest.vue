@@ -53,10 +53,13 @@ export default {
       for (const request of list) {
         if (this.drafts[request.requestId]) continue
         const product = bestProduct(this.products, request)
-        const fits = product && product.price <= request.budget
-        this.drafts[request.requestId] = { productId: product?.productId || '',
-          message: product ? `Hi ${request.consumerName}, our ${product.name.toLowerCase()} ${fits ? 'fits your budget and ' : ''}would work well for your ${request.occasion.toLowerCase()}.` : '' }
+        this.drafts[request.requestId] = { productId: product?.productId || '', message: this.suggestedMessage(request, product) }
       }
+    },
+    suggestedMessage(request, product) {
+      if (!product) return ''
+      const fits = product.price <= request.budget
+      return `Hi ${request.consumerName}, our ${product.name.toLowerCase()} ${fits ? 'fits your budget and ' : ''}would work well for your ${request.occasion.toLowerCase()}.`
     },
     async fetchPage(tab, page) {
       const query = new URLSearchParams({ tab, page })
@@ -129,7 +132,12 @@ export default {
     },
     setTab(tab) { this.tab = tab; this.selectedId = this.visible[0]?.requestId || ''; this.sentNotice = ''; this.pickerOpen = false },
     select(request) { this.selectedId = request.requestId; this.pickerOpen = false; this.sendError = ''; this.sentNotice = '' },
-    choose(product) { this.draft.productId = product.productId; this.pickerOpen = false },
+    choose(product) {
+      // Person 4: swap the ready-made message to the new product, unless the business already wrote their own.
+      const message = this.draft.message.trim()
+      if (!message || message === this.suggestedMessage(this.selected, this.chosenProduct)) this.draft.message = this.suggestedMessage(this.selected, product)
+      this.draft.productId = product.productId; this.pickerOpen = false
+    },
     async send() {
       const request = this.selected
       if (!this.canReply || !this.draft?.productId || !this.draft.message.trim() || this.sending) return

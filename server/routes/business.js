@@ -1,12 +1,20 @@
 const express = require('express');
 const { createBusinessController, defaultModels } = require('../controllers/businessController');
 const { requireBusiness, handleBusinessError } = require('../middleware/business');
+const { ensureSizeStock } = require('../services/sizeStock');
+
+// Person 4: before the first portal or store request, give older products
+// (made before stock per size) their old stock in every size. Runs once.
+const upgradeOldStock = models => async (req, res, next) => {
+  try { await ensureSizeStock(models.Product); next(); } catch (error) { next(error); }
+};
 
 // Person 4: business portal API, mounted at /api/business (business accounts only).
 function createBusinessRouter(models = defaultModels) {
   const router = express.Router();
   const controller = createBusinessController(models);
   router.use(requireBusiness);
+  router.use(upgradeOldStock(models));
 
   router.get('/profile', controller.getProfile);
   router.put('/profile', controller.saveProfile);
@@ -36,6 +44,7 @@ function createBusinessRouter(models = defaultModels) {
 function createCatalogRouter(models = defaultModels) {
   const router = express.Router();
   const controller = createBusinessController(models);
+  router.use(upgradeOldStock(models));
   router.get('/products', controller.getCatalog);
   router.get('/businesses/:id', controller.getCatalogBusiness);
   router.get('/products/:id', controller.getCatalogProduct);
