@@ -3,6 +3,7 @@ import {
   getReports,
   reviewReport,
 } from '../../services/reportService'
+import { deleteOutfitRequest } from '../../services/adminService'
 
 export default {
   data() {
@@ -11,6 +12,8 @@ export default {
       filter: 'pending',
       loading: true,
       saving: false,
+      removing: false,
+      removedRequestIds: [],
       error: '',
       message: '',
       selected: null,
@@ -38,7 +41,7 @@ export default {
       this.selected = null
 
       try {
-        const data = await getReports()
+        const data = await getReports('request')
         this.reports = data.reports
       } catch (error) {
         this.error = error.message
@@ -48,6 +51,7 @@ export default {
     },
 
     selectReport(report) {
+      if (this.saving || this.removing) return
       this.selected = report
       this.reviewNote = report.reviewNote || ''
       this.error = ''
@@ -58,7 +62,38 @@ export default {
       return new Date(date).toLocaleDateString('en-SG')
     },
 
+    async removeRequest() {
+      if (this.saving || this.removing || !this.selected) return
+
+      const requestId = this.selected.listingId
+      const requestName = this.selected.listingName
+
+      if (this.removedRequestIds.includes(requestId)) return
+
+      if (!window.confirm(
+        `Remove "${requestName}"? It will no longer appear on the request pages.`
+      )) return
+
+      this.removing = true
+      this.error = ''
+      this.message = ''
+
+      try {
+        await deleteOutfitRequest(requestId)
+        this.removedRequestIds.push(requestId)
+
+        this.message =
+          'Request removed. Add a review note and resolve the report when ready.'
+      } catch (error) {
+        this.error = error.message || 'Unable to remove the request.'
+      } finally {
+        this.removing = false
+      }
+    },
+
     async submitReview(status) {
+      if (this.saving || this.removing || !this.selected) return
+
       if (!this.reviewNote.trim()) {
         this.error = 'Enter a note explaining your decision.'
         return
@@ -93,10 +128,10 @@ export default {
 
 <template>
   <section class="admin-page">
-    <h1>Manage reports</h1>
-    <p>Review complaints about community listings.</p>
+    <h1>Outfit request reports</h1>
+    <p>Review reported outfit requests and record your moderation decisions.</p>
 
-    <RouterLink :to="{ name: 'admin-dashboard' }">
+    <RouterLink :to="{ name: 'admin-dashboard' }" class="back-button">
       ← Back to dashboard
     </RouterLink>
 
@@ -112,7 +147,7 @@ export default {
 
       <button
         type="button"
-        :disabled="loading || saving"
+        :disabled="loading || saving || removing"
         @click="loadReports"
       >
         Refresh
@@ -133,7 +168,7 @@ export default {
       <table>
         <thead>
           <tr>
-            <th scope="col">Listing</th>
+            <th scope="col">Outfit request</th>
             <th scope="col">Reported by</th>
             <th scope="col">Reason</th>
             <th scope="col">Date</th>
@@ -155,7 +190,7 @@ export default {
             <td>
               <button
                 type="button"
-                :disabled="saving"
+                :disabled="saving || removing"
                 :aria-label="`View report for ${report.listingName}`"
                 @click="selectReport(report)"
               >
@@ -183,13 +218,19 @@ export default {
       </p>
 
       <RouterLink
+        v-if="!removedRequestIds.includes(selected.listingId)"
         :to="{
-          name: 'style-feed',
-          params: { listingId: selected.listingId },
+          name: 'community-request',
+          params: { requestId: selected.listingId },
         }"
       >
-        Open listing →
+        Open outfit request →
       </RouterLink>
+
+      <p class="explanation">
+        Deleted requests are no longer available to open.
+        Their reports remain as moderation records.
+      </p>
 
       <p>
         <strong>Status:</strong> {{ selected.status }}
@@ -207,22 +248,39 @@ export default {
           maxlength="1000"
           rows="4"
           required
-          :disabled="saving"
+          :disabled="saving || removing"
         ></textarea>
 
         <p>
-          Record any action taken in Manage users or
-          Manage listings before resolving.
+          Record your findings and any moderation action before resolving.
+          Resolving or dismissing a report does not delete the request.
         </p>
 
         <div class="actions">
+          <button
+              v-if="!removedRequestIds.includes(selected.listingId)"
+              type="button"
+              class="remove-request-button"
+              :disabled="saving || removing"
+              @click="removeRequest"
+            >
+              {{ removing ? 'Removing…' : 'Remove request' }}
+            </button>
+
+            <span
+              v-else
+              class="removed-label"
+              role="status"
+            >
+              Request removed
+            </span>
           <button type="submit" :disabled="saving">
             Resolve
           </button>
 
           <button
             type="button"
-            :disabled="saving"
+            :disabled="saving || removing"
             @click="submitReview('dismissed')"
           >
             Dismiss
@@ -252,6 +310,25 @@ a {
   display: inline-block;
   color: #683760;
   margin-bottom: 20px;
+}
+
+.back-button {
+  display: inline-block;
+  margin-bottom: 20px;
+  padding: 10px 18px;
+  background: #683760;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.back-button:hover {
+  background: #542c4e;
+}
+
+.back-button:focus-visible {
+  outline: 2px solid #683760;
+  outline-offset: 3px;
 }
 
 .filter-field {
@@ -342,5 +419,23 @@ textarea {
 
 .success-message {
   color: #286344;
+}
+
+.remove-request-button {
+  background: #a0273f;
+}
+
+.remove-request-button:hover:not(:disabled) {
+  background: #821e33;
+}
+
+.removed-label {
+  align-self: center;
+  color: #6d6870;
+  font-size: 14px;
+}
+
+.actions {
+  flex-wrap: wrap;
 }
 </style>

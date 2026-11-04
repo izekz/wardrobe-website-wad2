@@ -47,9 +47,14 @@ export async function getListings() {
   return data
 }
 
-export function updateListingStatus(id, status) {
-  return request(`/listings/${encodeURIComponent(id)}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
+export function deleteListing(id) {
+  return request(`/listings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function deleteOutfitRequest(id) {
+  return request(`/requests/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   })
 }

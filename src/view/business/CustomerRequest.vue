@@ -2,12 +2,14 @@
 import { businessApi, sendJson, money, shortDate, bestProduct } from '../../services/businessApi'
 import { readableDate, today } from '../../services/communityApi'
 import BusinessIcon from '../../components/BusinessIcon.vue'
+import ReportDialog from '../../components/ReportDialog.vue'
 export default {
-  components: { BusinessIcon },
+  components: { BusinessIcon, ReportDialog },
   data() {
     return { openRequests: [], repliedRequests: [], totals: { open: 0, replied: 0 }, pages: { open: 1, replied: 1 }, products: [], loading: true, loadingMore: false, error: '', needsProfile: false,
       tab: 'open', search: this.$route.query.search || '', selectedId: this.$route.query.request || '', linkedRequestId: this.$route.query.request || '',
-      drafts: {}, pickerOpen: false, sending: false, sendError: '', sentNotice: '' }
+      drafts: {}, pickerOpen: false, sending: false, sendError: '', sentNotice: '',
+        reportTarget: null }
   },
   computed: {
     openList() { return this.openRequests },
@@ -197,7 +199,34 @@ export default {
             <div><strong>{{ selected.consumerName }}</strong><span class="biz-pill" :class="selected.myResponses.length ? 'green' : 'yellow'">{{ requestState(selected) }}</span>
               <div class="biz-muted">Requested on {{ shortDate(selected.createdAt) }} · {{ selected.responseCount }} {{ selected.responseCount === 1 ? 'reply' : 'replies' }} so far</div></div>
           </div>
-          <h2>{{ selected.title }}</h2>
+          <div class="request-title-row">
+            <h2>{{ selected.title }}</h2>
+
+            <button
+              type="button"
+              class="request-report-button"
+              title="Report request"
+              :aria-label="`Report outfit request: ${selected.title}`"
+              @click="reportTarget = {
+                id: selected.requestId,
+                title: selected.title
+              }"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 21V3m0 1c5-4 9 4 14 0v10c-5 4-9-4-14 0" />
+              </svg>
+            </button>
+          </div>
           <p class="biz-request-desc">{{ selected.occasion }}. {{ selected.description }}</p>
           <div class="biz-request-facts">
             <div><BusinessIcon name="coins" :size="28" /><span><strong>{{ money(selected.budget) }}</strong><small>Budget</small></span></div>
@@ -242,6 +271,51 @@ export default {
         </article>
         <div v-else-if="!loading" class="biz-request-detail biz-muted text-center">Choose a request to see the details.</div>
       </div>
-    </template>
+        </template>
+
+    <ReportDialog
+      v-if="reportTarget"
+      :listing-id="reportTarget.id"
+      :listing-name="reportTarget.title"
+      target-type="request"
+      @close="reportTarget = null"
+    />
   </section>
 </template>
+
+<style scoped>
+.request-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.request-title-row h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.request-report-button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e5dfe3;
+  border-radius: 50%;
+  background: #fffdfa;
+  color: #6b3a55;
+  cursor: pointer;
+}
+
+.request-report-button:hover {
+  background: #f6e8ef;
+}
+
+.request-report-button:focus-visible {
+  outline: 2px solid #683760;
+  outline-offset: 3px;
+}
+</style>

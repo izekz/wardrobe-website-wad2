@@ -1,7 +1,7 @@
 <script>
 import {
   getListings,
-  updateListingStatus,
+  deleteListing,
 } from '../../services/adminService'
 
 export default {
@@ -10,22 +10,42 @@ export default {
       listings: [],
       search: '',
       loading: true,
-      updatingId: null,
+      deletingId: null,
       loadError: '',
       actionError: '',
       message: '',
+      failedImages: {},
     }
   },
 
   computed: {
-    filteredListings() {
+    businessGroups() {
       const search = this.search.trim().toLowerCase()
+      const groups = new Map()
 
-      return this.listings.filter(listing =>
-        `${listing.name} ${listing.ownerName} ${listing.category}`
-          .toLowerCase()
-          .includes(search)
-      )
+      for (const listing of this.listings) {
+        const searchable = [
+          listing.name,
+          listing.businessName,
+          listing.category,
+        ].join(' ').toLowerCase()
+
+        if (search && !searchable.includes(search)) continue
+
+        const businessId = listing.businessId
+
+        if (!groups.has(businessId)) {
+          groups.set(businessId, {
+            id: businessId,
+            name: listing.businessName,
+            listings: [],
+          })
+        }
+
+        groups.get(businessId).listings.push(listing)
+      }
+
+      return Array.from(groups.values())
     },
   },
 
@@ -41,41 +61,40 @@ export default {
   },
 
   methods: {
-    formatPrice(listing) {
-      const amount = listing.listingType === 'rent'
-        ? listing.rentalPrice
-        : listing.price
-
-      return amount == null
-        ? '—'
-        : `S$${Number(amount).toFixed(2)}`
+    formatPrice(price) {
+      return `S$${Number(price).toFixed(2)}`
     },
 
-    async changeStatus(listing) {
-      const status = listing.status === 'available'
-        ? 'unavailable'
-        : 'available'
+    formatDate(date) {
+      return new Date(date).toLocaleDateString('en-SG')
+    },
 
-      if (!window.confirm(`Mark "${listing.name}" as ${status}?`)) {
-        return
-      }
+    async removeListing(listing) {
+      if (this.deletingId !== null) return
 
-      this.updatingId = listing.id
+      const confirmed = window.confirm(
+        `Delete "${listing.name}" from ${listing.businessName}? ` +
+        'This permanently removes the listing and cannot be undone.'
+      )
+
+      if (!confirmed) return
+
+      this.deletingId = listing.id
       this.actionError = ''
       this.message = ''
 
       try {
-        const data = await updateListingStatus(listing.id, status)
+        await deleteListing(listing.id)
 
-        this.listings = this.listings.map(item =>
-          item.id === listing.id ? data.listing : item
+        this.listings = this.listings.filter(
+          item => item.id !== listing.id
         )
 
-        this.message = `"${listing.name}" is now ${status}.`
+        this.message = `"${listing.name}" has been deleted.`
       } catch (error) {
-        this.actionError = error.message || 'Unable to update the listing.'
+        this.actionError = error.message || 'Unable to delete listing.'
       } finally {
-        this.updatingId = null
+        this.deletingId = null
       }
     },
   },
@@ -84,10 +103,15 @@ export default {
 
 <template>
   <section class="admin-page">
-    <h1>Manage listings</h1>
-    <p>Search community listings and manage their availability.</p>
+    <h1>Business listings</h1>
+    <p class="page-description">
+      Review listings by business, check reports, and remove listings.
+    </p>
 
-    <RouterLink :to="{ name: 'admin-dashboard' }">
+    <RouterLink
+      :to="{ name: 'admin-dashboard' }"
+      class="back-button"
+    >
       ← Back to dashboard
     </RouterLink>
 
@@ -99,12 +123,12 @@ export default {
 
     <div v-else>
       <div class="search-field">
-        <label for="listing-search">Search listings</label>
+        <label for="listing-search">Search business listings</label>
         <input
           id="listing-search"
           v-model="search"
           type="search"
-          placeholder="Search by item, owner or category"
+          placeholder="Search by product, business or category"
         />
       </div>
 
@@ -116,118 +140,361 @@ export default {
         {{ message }}
       </p>
 
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Item</th>
-              <th scope="col">Owner</th>
-              <th scope="col">Category</th>
-              <th scope="col">Type</th>
-              <th scope="col">Price</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+      <p v-if="businessGroups.length === 0" class="empty-state">
+        No listings found.
+      </p>
 
-          <tbody>
-            <tr
-              v-for="listing in filteredListings"
-              :key="listing.id"
+      <section
+        v-for="business in businessGroups"
+        :key="business.id"
+        class="business-group"
+      >
+        <header class="business-heading">
+          <h2>{{ business.name }}</h2>
+          <span>
+            {{ business.listings.length }}
+            {{ business.listings.length === 1 ? 'listing' : 'listings' }}
+          </span>
+        </header>
+
+        <article
+          v-for="listing in business.listings"
+          :key="listing.id"
+          class="listing-card"
+          :aria-labelledby="`listing-${listing.id}`"
+        >
+          <div class="listing-summary">
+            <img
+              v-if="!failedImages[listing.id]"
+              :src="listing.imageURL"
+              :alt="listing.name"
+              class="listing-image"
+              loading="lazy"
+              @error="failedImages[listing.id] = true"
+            />
+            <div v-else class="image-placeholder">
+              No image
+            </div>
+
+            <div class="listing-details">
+              <h3 :id="`listing-${listing.id}`">
+                {{ listing.name }}
+              </h3>
+
+              <p>{{ listing.category }}</p>
+              <p class="listing-price">
+                {{ formatPrice(listing.price) }}
+              </p>
+
+              <div class="listing-meta">
+                <span>Stock: {{ listing.stock }}</span>
+                <span class="status-badge">{{ listing.status }}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="delete-button"
+              :disabled="deletingId !== null"
+              :aria-label="`Delete listing: ${listing.name}`"
+              @click="removeListing(listing)"
             >
-              <td>{{ listing.name }}</td>
-              <td>{{ listing.ownerName }}</td>
-              <td>{{ listing.category }}</td>
-              <td>
-                {{ listing.listingType === 'rent' ? 'Rent' : 'Sale' }}
-              </td>
-              <td>{{ formatPrice(listing) }}</td>
-              <td>{{ listing.status }}</td>
-              <td>
-                <button
-                  type="button"
-                  :disabled="updatingId !== null"
-                  :aria-label="`Change availability of ${listing.name}`"
-                  @click="changeStatus(listing)"
-                >
-                  {{
-                    updatingId === listing.id
-                      ? 'Updating…'
-                      : listing.status === 'available'
-                        ? 'Mark unavailable'
-                        : 'Mark available'
-                  }}
-                </button>
-              </td>
-            </tr>
+              {{
+                deletingId === listing.id
+                  ? 'Deleting…'
+                  : 'Delete listing'
+              }}
+            </button>
+          </div>
 
-            <tr v-if="filteredListings.length === 0">
-              <td colspan="7">No listings found.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <div class="listing-reports">
+            <h4>Reports ({{ listing.reports.length }})</h4>
+
+            <p v-if="listing.reports.length === 0" class="muted">
+              No reports for this listing.
+            </p>
+
+            <div
+              v-for="report in listing.reports"
+              :key="report.id"
+              class="report-card"
+            >
+              <div class="report-heading">
+                <strong>{{ report.reason }}</strong>
+                <span
+                  class="status-badge"
+                  :class="`report-status-${report.status}`"
+                >
+                  {{ report.status }}
+                </span>
+              </div>
+
+              <p class="report-byline">
+                Reported by {{ report.reporterName }}
+                · {{ formatDate(report.createdAt) }}
+              </p>
+
+              <p class="report-text">
+                {{ report.explanation || 'No additional details provided.' }}
+              </p>
+
+              <p v-if="report.reviewNote" class="report-text">
+                <strong>Review note:</strong> {{ report.reviewNote }}
+              </p>
+            </div>
+          </div>
+        </article>
+      </section>
     </div>
   </section>
 </template>
 
 <style scoped>
-.admin-listings-page {
+.admin-page {
   color: #44213f;
-  padding-bottom: 32px;
+  padding: 24px 0 40px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Georgia, serif;
 }
 
 h1 {
-  font-family: Georgia, serif;
+  font-size: 36px;
+  margin: 0 0 8px;
+}
+
+.page-description {
+  color: #6d6870;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.back-button {
+  display: inline-block;
+  margin-bottom: 20px;
+  padding: 10px 18px;
+  background: #683760;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.back-button:hover {
+  background: #542c4e;
+}
+
+.back-button:focus-visible,
+button:focus-visible {
+  outline: 2px solid #683760;
+  outline-offset: 3px;
 }
 
 .search-field {
   display: grid;
   gap: 8px;
-  margin: 24px 0;
+  margin: 4px 0 28px;
   max-width: 440px;
 }
 
+.search-field label {
+  font-weight: bold;
+}
+
 .search-field input {
+  width: 100%;
+  box-sizing: border-box;
   padding: 12px;
   border: 1px solid #ddd5df;
+  border-radius: 8px;
+  background: white;
+  font: inherit;
+}
+
+.business-group {
+  margin-bottom: 32px;
+}
+
+.business-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.business-heading h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.business-heading > span {
+  color: #6d6870;
+  font-size: 14px;
+}
+
+.listing-card {
+  padding: 24px;
+  margin-bottom: 16px;
+  background: white;
+  border: 1px solid #e5dfe3;
+  border-radius: 16px;
+}
+
+.listing-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.listing-image,
+.image-placeholder {
+  width: 100px;
+  height: 120px;
+  flex-shrink: 0;
   border-radius: 10px;
 }
 
-.table-container {
-  overflow-x: auto;
+.listing-image {
+  object-fit: cover;
 }
 
-table {
-  width: 100%;
-  min-width: 850px;
-  border-collapse: collapse;
-  background: white;
-}
-
-th,
-td {
-  padding: 14px;
-  text-align: left;
-  border-bottom: 1px solid #e5dfe3;
-}
-
-th {
+.image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #f7f1fa;
+  color: #6d6870;
+  font-size: 13px;
 }
 
-button {
-  background: #683760;
-  color: white;
-  padding: 8px 14px;
-  border: 0;
+.listing-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.listing-details h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.listing-details p {
+  margin: 0 0 8px;
+  color: #6d6870;
+}
+
+.listing-details .listing-price {
+  color: #44213f;
+  font-weight: bold;
+}
+
+.listing-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f3edf5;
+  color: #683760;
+  border-radius: 20px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.delete-button {
+  padding: 10px 18px;
+  border: none;
   border-radius: 8px;
+  background: #a0273f;
+  color: white;
+  font: inherit;
   cursor: pointer;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: #821e33;
 }
 
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.listing-reports {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5dfe3;
+}
+
+.listing-reports h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.report-card {
+  margin-top: 12px;
+  padding: 16px;
+  background: #fcf8fb;
+  border: 1px solid #eee5ec;
+  border-radius: 10px;
+}
+
+.report-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-byline,
+.muted {
+  color: #6d6870;
+  font-size: 14px;
+}
+
+.report-byline {
+  margin: 8px 0;
+}
+
+.report-text {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.report-status-pending {
+  background: #fff1d6;
+  color: #805514;
+}
+
+.report-status-resolved {
+  background: #e8f4eb;
+  color: #286344;
+}
+
+.report-status-dismissed {
+  background: #eeeef0;
+  color: #5b5860;
+}
+
+.empty-state {
+  padding: 28px;
+  text-align: center;
+  background: white;
+  border: 1px solid #e5dfe3;
+  border-radius: 12px;
+  color: #6d6870;
 }
 
 .error-message {
@@ -236,5 +503,30 @@ button:disabled {
 
 .success-message {
   color: #286344;
+}
+
+@media (max-width: 650px) {
+  .listing-card {
+    padding: 16px;
+  }
+
+  .listing-summary {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .listing-image,
+  .image-placeholder {
+    width: 80px;
+    height: 100px;
+  }
+
+  .listing-details {
+    flex-basis: calc(100% - 94px);
+  }
+
+  .delete-button {
+    width: 100%;
+  }
 }
 </style>

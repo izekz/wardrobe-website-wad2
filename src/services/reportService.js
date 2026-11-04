@@ -29,8 +29,12 @@ export function createReport(form) {
   })
 }
 
-export async function getReports() {
-  const data = await request('')
+export async function getReports(targetType) {
+  const query = targetType
+    ? `?targetType=${encodeURIComponent(targetType)}`
+    : ''
+
+  const data = await request(query)
 
   if (!Array.isArray(data.reports)) {
     throw new Error('The server returned an unexpected response.')

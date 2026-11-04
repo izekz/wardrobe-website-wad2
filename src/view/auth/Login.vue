@@ -16,9 +16,15 @@ async function submit() {
   try {
     const user = await login(email.value, password.value, remember.value)
     password.value = ''
-    if (user.role === 'business') await router.push({ name: 'business-dashboard' })
-    else if (user.role === 'consumer' && !user.surveyCompleted) await router.push({ name: 'style-survey' })
-    else await router.push({ name: 'discover' })
+    if (user.role === 'admin') {
+      await router.replace({ name: 'admin-dashboard' })
+    } else if (user.role === 'business') {
+      await router.replace({ name: 'business-dashboard' })
+    } else if (user.role === 'consumer' && !user.surveyCompleted) {
+      await router.replace({ name: 'style-survey' })
+    } else {
+      await router.replace({ name: 'discover' })
+    }
   } catch (err) { error.value = err.message }
   finally { busy.value = false }
 }

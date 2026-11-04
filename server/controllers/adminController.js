@@ -1,5 +1,7 @@
 const User = require('../models/User')
-const Listing = require('../models/CommunityListing')
+const Product = require('../models/Product')
+const Report = require('../models/Report')
+const OutfitRequest = require('../models/OutfitRequest')
 
 async function getUsers(req, res, next) {
   try {
@@ -73,38 +75,62 @@ async function updateUserStatus(req, res, next) {
   }
 }
 
-function listingJson(listing) {
-  return {
-    id: String(listing._id),
-    name: listing.name,
-    ownerName: listing.ownerName,
-    category: listing.category,
-    listingType: listing.listingType,
-    price: listing.price,
-    rentalPrice: listing.rentalPrice,
-    status: listing.status,
-  }
-}
-
 async function getListings(req, res, next) {
   try {
-    const listings = await Listing.find()
-      .select('name ownerName category listingType price rentalPrice status')
+    const listings = await Product.find()
+      .select('name businessId businessName category price stock status')
+      .sort({ businessName: 1, createdAt: -1 })
+      .lean()
+
+    const reports = await Report.find({
+      targetType: 'listing',
+      listingId: { $in: listings.map(listing => listing._id) },
+    })
       .sort({ createdAt: -1 })
       .lean()
 
+    const reportsByListing = new Map()
+
+    for (const report of reports) {
+      const id = String(report.listingId)
+
+      if (!reportsByListing.has(id)) {
+        reportsByListing.set(id, [])
+      }
+
+      reportsByListing.get(id).push({
+        id: String(report._id),
+        reporterName: report.reporterName,
+        reason: report.reason,
+        explanation: report.explanation,
+        status: report.status,
+        reviewNote: report.reviewNote,
+        createdAt: report.createdAt,
+      })
+    }
+
     res.json({
-      listings: listings.map(listingJson),
+      listings: listings.map(listing => ({
+        id: String(listing._id),
+        name: listing.name,
+        businessId: listing.businessId,
+        businessName: listing.businessName,
+        category: listing.category,
+        price: listing.price,
+        stock: listing.stock,
+        status: listing.status,
+        imageURL: `/api/catalog/products/${listing._id}/image`,
+        reports: reportsByListing.get(String(listing._id)) || [],
+      })),
     })
   } catch (error) {
     next(error)
   }
 }
 
-async function updateListingStatus(req, res, next) {
+async function deleteListing(req, res, next) {
   try {
     const { id } = req.params
-    const status = req.body?.status
 
     if (!/^[a-fA-F0-9]{24}$/.test(id)) {
       return res.status(400).json({
@@ -112,30 +138,69 @@ async function updateListingStatus(req, res, next) {
       })
     }
 
-    if (!['available', 'unavailable'].includes(status)) {
-      return res.status(400).json({
-        message: 'Choose available or unavailable.',
-      })
-    }
-
-    const listing = await Listing.findByIdAndUpdate(
-      id,
-      { $set: { status } },
-      { new: true, runValidators: true }
-    )
-      .select('name ownerName category listingType price rentalPrice status')
-      .lean()
+    const listing = await Product.findByIdAndDelete(id)
 
     if (!listing) {
       return res.status(404).json({
-        message: 'Listing not found.',
+        message: 'Listing not found or already deleted.',
       })
     }
 
-    res.json({ listing: listingJson(listing) })
+    res.json({
+      message: 'Business listing deleted.',
+      id: String(listing._id),
+    })
   } catch (error) {
     next(error)
   }
 }
 
-module.exports = { getUsers, updateUserStatus, getListings, updateListingStatus }
+async function deleteOutfitRequest(req, res, next) {
+  try {
+    const { id } = req.params
+
+    if (!/^[a-fA-F0-9]{24}$/.test(id)) {
+      return res.status(400).json({
+        message: 'Invalid request ID.',
+      })
+    }
+
+    const request = await OutfitRequest.findOneAndUpdate(
+      {
+        _id: id,
+        deletedAt: null,
+      },
+      {
+        $set: {
+          deletedAt: new Date(),
+          status: 'closed',
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    )
+
+    if (!request) {
+      return res.status(404).json({
+        message: 'Request not found or already removed.',
+      })
+    }
+
+    res.json({
+      message: 'Outfit request removed.',
+      id: String(request._id),
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+module.exports = {
+  getUsers,
+  updateUserStatus,
+  getListings,
+  deleteListing,
+  deleteOutfitRequest,
+}

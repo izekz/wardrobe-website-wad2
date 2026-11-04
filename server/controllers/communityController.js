@@ -334,12 +334,18 @@ function createCommunityController(models = defaultModels) {
     if (!actor) return res.status(401).json({ message: 'Please sign in.' });
     const owner = actor.id === item.consumerId && ['consumer', 'customer'].includes(actor.role);
     const isBusiness = actor.role === 'business';
+    const isAdmin = actor.role === 'admin';
     let ownBusinessReplies = [];
     if (!owner && isBusiness) {
       const business = await Business.findOne({ ownerId: actor.id });
       if (business) ownBusinessReplies = await Response.find({ requestId: item._id, businessId: String(business._id) });
-    } else if (!owner) return res.status(404).json({ message: 'Request not found.' });
-    const responses = owner ? await Response.find({ requestId: item._id }).sort({ createdAt: -1 }) : ownBusinessReplies;
+    } else if (!owner && !isAdmin) {
+      return res.status(404).json({ message: 'Request not found.' });
+    }
+
+    const responses = (owner || isAdmin)
+      ? await Response.find({ requestId: item._id }).sort({ createdAt: -1 })
+      : ownBusinessReplies;
     const productIds = responses.map(reply => reply.productId).filter(idIsValid);
     const products = Product && productIds.length ? await Product.find({ _id: { $in: productIds }, status: 'active' }) : [];
     const byId = new Map(products.map(product => [String(product._id), product]));

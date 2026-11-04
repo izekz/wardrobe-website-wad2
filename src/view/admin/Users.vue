@@ -78,7 +78,7 @@ export default {
     <h1>Manage users</h1>
     <p>Search accounts and manage their access.</p>
 
-    <RouterLink :to="{ name: 'admin-dashboard' }">
+    <RouterLink :to="{ name: 'admin-dashboard' }" class="back-button">
       ← Back to dashboard
     </RouterLink>
 
@@ -177,10 +177,23 @@ h1 {
   margin: 0 0 20px;
 }
 
-a {
+.back-button {
   display: inline-block;
-  color: #683760;
   margin-bottom: 20px;
+  padding: 10px 18px;
+  background: #683760;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.back-button:hover {
+  background: #542c4e;
+}
+
+.back-button:focus-visible {
+  outline: 2px solid #683760;
+  outline-offset: 3px;
 }
 
 .search-field {

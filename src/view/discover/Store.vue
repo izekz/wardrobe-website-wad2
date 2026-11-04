@@ -83,7 +83,14 @@ export default {
   <div v-else-if="error" class="community-error" role="alert">{{error}} <button class="community-text-button" @click="load(page)">Try again</button></div>
   <template v-else>
     <div v-if="!products.length" class="community-empty"><CommunityIcon name="hanger" :size="44"/><h2>{{hasFilters?'Nothing matches just yet':'No pieces here yet'}}</h2><p>{{hasFilters?'Try widening one filter, your style profile will still help rank the results.':'Businesses haven’t listed anything yet. Check back soon.'}}</p><button v-if="hasFilters" type="button" class="community-btn community-btn-outline" @click="resetFilters">Clear filters</button></div>
-    <div v-else class="disc-grid"><ProductCard v-for="product in products" :key="product.productId" :product="product"/></div>
+    <div v-else class="disc-grid">
+      <ProductCard
+        v-for="product in products"
+        :key="product.productId"
+        :product="product"
+        :reportable="isShopper"
+      />
+    </div>
     <nav v-if="pageCount>1" aria-label="Item pages" class="community-pagination"><button class="community-btn community-btn-outline" :disabled="page===1" @click="load(page-1)">Previous</button><span>Page {{page}} of {{pageCount}}</span><button class="community-btn community-btn-outline" :disabled="page>=pageCount" @click="load(page+1)">Next</button></nav>
   </template>
   <aside v-if="isShopper" class="community-share-banner"><CommunityFloral class="banner-flower"/><div><h2>Still missing the right piece?</h2><p>Post exactly what you need and let businesses respond with relevant options.</p></div><RouterLink :to="{name:'community-requests'}" class="community-btn">Post a request <CommunityIcon name="arrow"/></RouterLink><CommunityFloral variant="sprig" class="banner-sprig"/></aside>

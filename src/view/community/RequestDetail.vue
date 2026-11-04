@@ -2,10 +2,28 @@
 import { communityApi, money, readableDate, today } from '../../services/communityApi'
 import ProductCard from '../../components/ProductCard.vue'
 import RequestContacts from '../../components/RequestContacts.vue'
+import ReportDialog from '../../components/ReportDialog.vue'
 import { authState } from '../../services/authService'
+
 export default {
-  components: { ProductCard, RequestContacts },
-  data() { return { item: null, responses: [], loading: false, error: '', refreshError: '', loadVersion: 0, changing: false, deleting: false, accepting: '', cancelling: false, statusError: '', statusNotice: '' } },
+  components: { ProductCard, RequestContacts, ReportDialog },
+  data() {
+    return {
+      reportOpen: false,
+      item: null,
+      responses: [],
+      loading: false,
+      error: '',
+      refreshError: '',
+      loadVersion: 0,
+      changing: false,
+      deleting: false,
+      accepting: '',
+      cancelling: false,
+      statusError: '',
+      statusNotice: '',
+    }
+  },
   computed: { isOwner() { return this.item?.consumerId === authState.user?.id }, isCustomer() { return ['consumer', 'customer'].includes(authState.user?.role) } },
   watch: { '$route.params.requestId': { immediate: true, handler() { this.item = null; this.responses = []; this.statusNotice = ''; this.loadRequest() } } },
   mounted() {
@@ -86,8 +104,47 @@ export default {
           <h1>{{ item.title }}</h1><p class="community-muted mt-3">{{ item.occasion }}</p>
           <div class="d-flex flex-wrap gap-2 my-4"><span v-if="isOwner" class="community-tag request-owner-badge">Your request</span><span class="community-tag peach">Budget {{ money(item.budget) }}</span><span class="community-tag">{{ item.preferredStyle }}</span><span class="community-tag yellow">By {{ readableDate(item.deadline) }}</span><span class="community-tag" :class="item.status === 'open' ? 'request-status-open' : 'request-status-closed'">{{ item.expired ? 'Expired' : item.status === 'open' ? 'Open' : 'Closed' }}</span><span v-if="item.fulfilled" class="community-tag request-status-open">Fulfilled · demo purchase</span></div>
           <p class="community-description mb-0">{{ item.description }}</p>
-          <p v-if="isOwner && item.status === 'closed'" class="community-muted mt-3 mb-0">{{ item.fulfilled ? 'Demo purchase complete.' : item.acceptedResponseId ? 'Suggestion accepted. You can change your choice before completing a demo purchase.' : item.expired ? 'Your request has expired. New product suggestions are closed, but businesses can send you an in-app follow-up message. You can still choose an earlier suggestion.' : 'Your request is closed to new business suggestions. You can still choose an available suggestion you received earlier.' }}</p>
-          <p v-else-if="isOwner && item.deadline < today()" class="community-muted mt-3 mb-0">The needed-by date has passed. Post a new request to receive suggestions.</p>
+<p
+  v-if="isOwner && item.status === 'closed'"
+  class="community-muted mt-3 mb-0"
+>
+  {{
+    item.fulfilled
+      ? 'Demo purchase complete.'
+      : item.acceptedResponseId
+        ? 'Suggestion accepted. You can change your choice before completing a demo purchase.'
+        : item.expired
+          ? 'Your request has expired. New product suggestions are closed, but businesses can send you an in-app follow-up message. You can still choose an earlier suggestion.'
+          : 'Your request is closed to new business suggestions. You can still choose an available suggestion you received earlier.'
+  }}
+</p>
+
+<p
+  v-else-if="isOwner && item.deadline < today()"
+  class="community-muted mt-3 mb-0"
+>
+  The needed-by date has passed. Post a new request to receive suggestions.
+</p>
+
+<div v-if="!isOwner" class="mt-4">
+  <button
+    type="button"
+    class="community-text-button"
+    :aria-label="`Report outfit request: ${item.title}`"
+    @click="reportOpen = true"
+  >
+    Report request
+  </button>
+</div>
+
+<ReportDialog
+  v-if="reportOpen"
+  :key="item.requestId"
+  :listing-id="item.requestId"
+  :listing-name="item.title"
+  target-type="request"
+  @close="reportOpen = false"
+/>
           <div v-if="isOwner" class="d-flex flex-wrap align-items-center gap-3 mt-4">
             <button v-if="!item.fulfilled && !item.acceptedResponseId && (item.status === 'open' || item.deadline >= today())" class="community-btn community-btn-outline" :disabled="changing" @click="changeStatus">{{ changing ? 'Saving…' : item.status === 'open' ? 'Close request' : 'Reopen request' }}</button>
             <RouterLink v-if="item.acceptedResponseId" :to="checkoutRoute(item.acceptedResponseId)" class="community-btn">{{ item.fulfilled ? 'View demo receipt' : 'Continue to demo checkout' }}</RouterLink>

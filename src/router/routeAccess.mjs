@@ -10,8 +10,9 @@ export function createAuthGuard(restoreSession, onError = () => {}) {
       const user = await restoreSession()
       if (!user) return isPublic ? true : { name: 'login', replace: true }
       if (isPublic && isAuthPage) {
-        const name = user.role === 'business' ? 'business-dashboard' :
-          user.role === 'consumer' && !user.surveyCompleted ? 'style-survey' : 'discover'
+        const name = user.role === 'admin' ? 'admin-dashboard' :
+        user.role === 'business' ? 'business-dashboard' :
+        user.role === 'consumer' && !user.surveyCompleted ? 'style-survey' : 'discover'
         return { name, replace: true }
       }
       // Business accounts stay inside the business portal: any customer page

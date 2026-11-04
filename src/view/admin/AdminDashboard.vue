@@ -1,7 +1,7 @@
 <template>
   <section class="admin-page">
     <h1>Admin dashboard</h1>
-    <p>Manage users and community listings.</p>
+    <p>Manage users, business listings, and outfit request reports.</p>
 
     <div class="admin-grid">
         <div class="admin-card">
@@ -14,20 +14,19 @@
         </div>
 
         <div class="admin-card">
-            <h2>Listings</h2>
-            <p>View and manage community marketplace listings.</p>
-
+            <h2>Business listings</h2>
+            <p>Review products grouped by business, check reports, and delete listings.</p>
             <RouterLink :to="{ name: 'admin-listings' }">
                 Manage listings →
             </RouterLink>
         </div>
 
         <div class="admin-card">
-            <h2>Reports</h2>
-            <p>Review complaints about community listings.</p>
+            <h2>Outfit request reports</h2>
+            <p>Review reported outfit requests and take moderation action.</p>
 
             <RouterLink :to="{ name: 'admin-reports' }">
-                Manage reports →
+                Review request reports →
             </RouterLink>
         </div>
     </div>

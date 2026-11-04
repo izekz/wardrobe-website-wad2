@@ -6,7 +6,8 @@ const {
   getUsers,
   updateUserStatus,
   getListings,
-  updateListingStatus,
+  deleteListing,
+  deleteOutfitRequest,
 } = require('../controllers/adminController')
 
 const router = express.Router()
@@ -24,11 +25,16 @@ router.patch(
 
 router.get('/listings', getListings)
 
-router.patch(
-  '/listings/:id/status',
+router.delete(
+  '/listings/:id',
   trustedBrowser,
-  express.json({ limit: '16kb' }),
-  updateListingStatus
+  deleteListing
+)
+
+router.delete(
+  '/requests/:id',
+  trustedBrowser,
+  deleteOutfitRequest
 )
 
 module.exports = router

@@ -26,7 +26,12 @@ async function login(req, res) {
   attempt.count++;
   const user = await User.findOne({ email }).select('+passwordHash');
   const valid = await verifyPassword(password, user?.passwordHash || await dummyHash);
-  if (!user || !valid || user.suspended) return res.status(401).json({ message: 'Email or password is incorrect.' });
+  if (!user || !valid) {
+    return res.status(401).json({ message: 'Email or password is incorrect.' });
+  }
+  if (user.suspended) {
+    return res.status(403).json({ message: 'Your account has been suspended.' });
+  }
   await createSession(req, res, user, req.body.remember === true);
   attempts.delete(key);
   res.json({ user: publicUser(user) });
