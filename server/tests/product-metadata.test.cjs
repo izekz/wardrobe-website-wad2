@@ -39,7 +39,7 @@ test('business product create/edit persists metadata, keeps photos and passes tr
   app.use('/api', requireAuth);
   app.use('/api/business', createBusinessRouter(models));
   app.use('/api/catalog', createCatalogRouter(models));
-  app.use('/api/wardrobe', createWardrobeRouter(models, async () => ({ available: true, tags: ['Warm'], temperature: 31 })));
+  app.use('/api/wardrobe', createWardrobeRouter(models, async () => ({ available: true, tags: ['Warm'], temperature: 31 }), async () => ({})));
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   t.after(() => new Promise(resolve => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}/api`;

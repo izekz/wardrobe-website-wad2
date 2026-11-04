@@ -106,7 +106,7 @@ test("Private wardrobe HTTP workflows", async (t) => {
   app.use(
     "/api/wardrobe",
     requireAuth,
-    createWardrobeRouter(models, async () => weather),
+    createWardrobeRouter(models, async () => weather, async () => ({})),
   );
   app.use((error, req, res, next) =>
     res.status(error.status || 500).json({ message: error.message }),

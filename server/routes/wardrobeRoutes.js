@@ -4,9 +4,9 @@ const {
   createWardrobeController,
 } = require("../controllers/wardrobeController");
 const { requireAuth, trustedBrowser } = require("../middleware/authentication");
-function createWardrobeRouter(models, weatherProvider) {
+function createWardrobeRouter(models, weatherProvider, colourProvider) {
   const router = express.Router(),
-    c = createWardrobeController(models, weatherProvider);
+    c = createWardrobeController(models, weatherProvider, colourProvider);
   router.use(requireAuth);
   router.use((req, res, next) => {
     res.set("Cache-Control", "no-store");

@@ -6,6 +6,7 @@ const Item = require("../models/WardrobeItem"),
   Product = require("../models/Product");
 const v = require("../services/wardrobeValidation");
 const { getWeather } = require("../services/weatherService");
+const { getColourMatches } = require("../services/colourService");
 const {
   recommendations,
   compatiblePieces,
@@ -34,6 +35,7 @@ function itemJson(doc) {
 function createWardrobeController(
   models = { Item, Outfit, Product },
   weatherProvider = getWeather,
+  colourProvider = getColourMatches,
 ) {
   const { Item, Outfit, Product } = models,
     owner = (req) => String(req.user.id);
@@ -205,12 +207,17 @@ function createWardrobeController(
     ]);
     if (docs.length !== ids.length)
       throw v.badRequest("A selected piece is no longer in your wardrobe.");
+    const pieces = [...docs.map(itemJson), ...(product ? [product] : [])];
+    let colourMatches = {};
+    try { colourMatches = await colourProvider(pieces.map(piece => piece.colour)); }
+    catch { /* Palette lookup must never prevent selecting or saving an outfit. */ }
     res.json({
       selection: assessSelection(
-        [...docs.map(itemJson), ...(product ? [product] : [])],
+        pieces,
         occasion,
         styles,
         forecast,
+        colourMatches,
       ),
     });
   }

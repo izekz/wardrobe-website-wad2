@@ -770,8 +770,18 @@ watch(
                   <span>{{ part.label }}</span><span>{{ part.available ? `${part.earned} / ${part.weight}` : `${part.provided ? 'Not assessed' : 'Unknown'} · 0 / ${part.weight}` }}</span>
                 </div>
               </section>
-              <p>Colour pairs: neutral 100%, same or complementary 67%, other known pairs 20%.
+              <p>Colour pairs: neutral 100%, same or compatible 67%, other known pairs 20%.
+                Compatible pairs include existing matches and complementary or analogous palettes from The Color API.
+                Palette matching allows nearby shades; unavailable palettes use the existing colour rules.
                 Weather checks earn full, half or zero points for temperature and rain. Unknown checks are left out.</p>
+            </details>
+            <details v-if="selection?.scoreDetails.colourDetails?.length" class="wd-item-score-details">
+              <summary>Colour pair points</summary>
+              <section v-for="(pair, index) in selection.scoreDetails.colourDetails" :key="index">
+                <strong>{{ pair.colours.join(' + ') }} · {{ pair.points }} / 3</strong>
+                <p>{{ pair.explanation }}</p>
+              </section>
+              <p>Average pair points ÷ 3 × 25 gives your colour coordination points. Neutral colours, same colours and existing compatible pairs retain their original points.</p>
             </details>
             <p>Personal style preferences affect recommendations only. They do not add match points.</p>
             <p class="wd-score-key">
@@ -798,6 +808,7 @@ watch(
       <a href="https://open-meteo.com/" target="_blank" rel="noopener"
         >Open-Meteo</a
       >. Daily forecast for Singapore; actual conditions may differ.
+      Colour palettes by <a href="https://www.thecolorapi.com/" target="_blank" rel="noopener">The Color API</a> when available.
     </p>
   </section>
 </template>

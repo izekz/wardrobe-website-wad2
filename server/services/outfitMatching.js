@@ -75,13 +75,21 @@ function rankItem(item, occasion, styles = []) {
   const result = recommendationFor(item, { occasion, styles });
   return result.priority * 100 + result.occasionScore;
 }
-function colourScore(a, b) {
+function colourPair(a, b, colourMatches) {
   a = lower(a); b = lower(b);
-  if (!colourNames.has(a) || !colourNames.has(b) || a === "multicolour" || b === "multicolour") return 0;
-  if (neutrals.has(a) || neutrals.has(b)) return 3;
-  if (a === b || pairs.has([a, b].sort().join(":"))) return 2;
-  return 0.6;
+  if (!colourNames.has(a) || !colourNames.has(b) || a === "multicolour" || b === "multicolour")
+    return { points: 0, explanation: "Colour not assessed" };
+  if (neutrals.has(a) || neutrals.has(b)) return { points: 3, explanation: "Neutral-colour rule" };
+  if (a === b) return { points: 2, explanation: "Same colour" };
+  const key = [a, b].sort().join(":"), palette = colourMatches?.[key];
+  if (pairs.has(key)) return { points: 2, explanation: "Existing compatible-colour rule" };
+  if (palette?.available && palette.matches) return {
+    points: 2,
+    explanation: `Palette harmony (${palette.modes.map(mode => mode === "complement" ? "complementary" : "analogous").join(" / ")})`,
+  };
+  return { points: 0.6, explanation: palette?.available ? "No palette harmony found" : "Local colour rules (palette unavailable)" };
 }
+function colourScore(a, b, colourMatches) { return colourPair(a, b, colourMatches).points; }
 function weatherRating(item, weather) {
   const kind = materialKind(item.material);
   // A generic plastic label earns partial occasion points, but does not establish
@@ -112,13 +120,17 @@ function compatiblePieces(pieces) {
   for (const p of pieces) counts[p.category] = (counts[p.category] || 0) + 1;
   return !Object.values(counts).some(n => n > 1) && !(counts.Dresses && (counts.Tops || counts.Bottoms));
 }
-function matchRating(pieces, occasion, styles, weather) {
+function matchRating(pieces, occasion, styles, weather, colourMatches) {
   if (!pieces.length) return { matchScore: null, scoreDetails: { components: [], availableWeight: 0, penalty: 0 } };
   const itemDetails = pieces.map(p => occasionRating(p, occasion));
   let colourTotal = 0, colourPairs = 0;
+  const colourDetails = [];
   for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
-    const points = colourScore(pieces[i].colour, pieces[j].colour);
-    if (points > 0) { colourPairs++; colourTotal += points / 3; }
+    const pair = colourPair(pieces[i].colour, pieces[j].colour, colourMatches);
+    if (pair.points > 0) {
+      colourPairs++; colourTotal += pair.points / 3;
+      colourDetails.push({ colours: [pieces[i].colour, pieces[j].colour], names: [pieces[i].name, pieces[j].name], ...pair });
+    }
   }
   const weatherDetails = pieces.map(p => weatherRating(p, weather)).filter(Boolean);
   const components = [
@@ -129,7 +141,7 @@ function matchRating(pieces, occasion, styles, weather) {
   const availableWeight = components.filter(c => c.available).reduce((n, c) => n + c.weight, 0);
   const earned = components.reduce((n, c) => n + c.earned, 0);
   const rawScore = Math.round(earned / availableWeight * 100);
-  return { matchScore: Math.max(5, Math.min(100, rawScore)), scoreDetails: { components, itemDetails, weatherDetails, availableWeight, earned, penalty: 0, minimumApplied: rawScore < 5, provisional: pieces.length === 1 } };
+  return { matchScore: Math.max(5, Math.min(100, rawScore)), scoreDetails: { components, itemDetails, colourDetails, weatherDetails, availableWeight, earned, penalty: 0, minimumApplied: rawScore < 5, provisional: pieces.length === 1 } };
 }
 function recommendations(
   items,
@@ -246,14 +258,14 @@ function recommendations(
     })
     .slice(0, 8);
 }
-function assessSelection(pieces, occasion, styles, weather) {
+function assessSelection(pieces, occasion, styles, weather, colourMatches) {
   occasion = normalizeOccasion(occasion);
   if (!pieces.length) return null;
   if (!compatiblePieces(pieces)) throw badRequest("Choose one piece per category. A dress replaces a top and bottom.");
   const categories = new Set(pieces.map(p => p.category));
   const required = categories.has("Dresses") ? ["Dresses", "Shoes"] : ["Tops", "Bottoms", "Shoes"];
   const gaps = required.filter(c => !categories.has(c));
-  const rating = matchRating(pieces, occasion, styles, weather);
+  const rating = matchRating(pieces, occasion, styles, weather, colourMatches);
   const comments = [];
   for (const item of rating.scoreDetails.itemDetails) {
     if (item.enoughData && item.earned < 24) {
