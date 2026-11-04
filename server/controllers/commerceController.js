@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const { takeStock, returnStock, stockForSize } = require('../services/sizeStock');
 function fail(status,message){const e=new Error(message);e.status=status;throw e}
 async function checkout(req,res){
   if(req.user.role!=='consumer') fail(403,'Only customer accounts can checkout.');
@@ -14,9 +15,15 @@ async function checkout(req,res){
     for(const line of items){
       if(!mongoose.isObjectIdOrHexString(line.productId)) fail(400,'One cart item is invalid.');
       const qty=Number(line.quantity); if(!Number.isInteger(qty)||qty<1||qty>10) fail(400,'Choose a valid quantity.');
-      const product=await Product.findOneAndUpdate({_id:line.productId,status:'active',stock:{$gte:qty}},{$inc:{stock:-qty}},{new:true});
-      if(!product) fail(409,'One of your items is no longer available in that quantity. Refresh your cart and try again.');
-      reserved.push({id:product._id,qty});
+      // Person 4: take stock from the chosen size only (older listings share one stock).
+      const size=String(line.size||'');
+      const current=await Product.findOne({_id:line.productId,status:'active'});
+      if(!current) fail(409,'One of your items is no longer available. Refresh your cart and try again.');
+      if(current.sizes?.length&&!current.sizes.includes(size)) fail(400,`Choose a size for ${current.name}.`);
+      const take=takeStock(current,size,qty);
+      const product=take&&await Product.findOneAndUpdate({_id:current._id,status:'active',...take.filter},take.update,{new:true});
+      if(!product) fail(409,`${current.name}${size?` in size ${size}`:''} is no longer available in that quantity. Refresh your cart and try again.`);
+      reserved.push({id:product._id,qty,back:returnStock(product,size,qty)});
       orderItems.push({productId:String(product._id),businessId:product.businessId,name:product.name,price:product.price,quantity:qty,size:String(line.size||''),colour:String(line.colour||'')});
     }
     const subtotal=orderItems.reduce((s,i)=>s+i.price*i.quantity,0);
@@ -24,7 +31,7 @@ async function checkout(req,res){
     const order=await Order.create({userId:req.user.id,orderNumber,items:orderItems,subtotal,delivery:{name:String(delivery.name).slice(0,100),email:String(delivery.email).slice(0,120),address:String(delivery.address).slice(0,240),postal:String(delivery.postal).slice(0,12)},payment:{method:'demo-card',last4:String(payment.last4),cardholder:String(payment.cardholder||'').slice(0,100)}});
     res.status(201).json({order:{orderId:String(order._id),orderNumber:order.orderNumber,subtotal:order.subtotal,status:order.status}});
   }catch(error){
-    if(reserved.length) await Promise.all(reserved.map(r=>Product.updateOne({_id:r.id},{$inc:{stock:r.qty}})));
+    if(reserved.length) await Promise.all(reserved.map(r=>Product.updateOne({_id:r.id,...r.back.filter},r.back.update)));
     throw error;
   }
 }
@@ -43,7 +50,7 @@ function createShoppingController(models = { User, Product }) {
   }
   async function productsFor(ids) {
     const rows = ids.length ? await models.Product.find({ _id: { $in: [...new Set(ids)] } })
-      .select('_id businessName name price stock status sizes colour colours description') : [];
+      .select('_id businessName name price stock sizeStock status sizes colour colours description') : [];
     return new Map(rows.map(product => [String(product._id), product]));
   }
   function validVariant(product, line) {
@@ -56,8 +63,8 @@ function createShoppingController(models = { User, Product }) {
       const productId = String(line.productId), product = products.get(productId);
       return { key: lineKey({ ...line, productId }), productId, size: line.size || '', colour: line.colour || '', quantity: line.quantity,
         name: product?.name || 'Unavailable product', price: product?.price ?? 0,
-        businessName: product?.businessName || '', imageURL: `/api/catalog/products/${productId}/image`, stock: product?.stock || 0,
-        available: !!product && product.status === 'active' && product.stock >= line.quantity && validVariant(product, line) };
+        businessName: product?.businessName || '', imageURL: `/api/catalog/products/${productId}/image`, stock: product ? stockForSize(product, line.size) : 0,
+        available: !!product && product.status === 'active' && stockForSize(product, line.size) >= line.quantity && validVariant(product, line) };
     });
   }
   async function getShop(req, res) {
@@ -93,7 +100,7 @@ function createShoppingController(models = { User, Product }) {
       const product = products.get(line.productId), old = previous.get(lineKey(line));
       // Keep an existing unavailable item removable without blocking changes to other lines.
       const retained = old && line.quantity <= old.quantity;
-      if ((!product || product.status !== 'active' || !validVariant(product, line) || product.stock < line.quantity) && !retained)
+      if ((!product || product.status !== 'active' || !validVariant(product, line) || stockForSize(product, line.size) < line.quantity) && !retained)
         fail(409, 'A cart item is unavailable in that size, colour or quantity. Refresh your cart.');
     }
     const updated = await models.User.findOneAndUpdate({ _id: req.user.id, role: 'consumer', suspended: { $ne: true } },

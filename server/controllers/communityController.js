@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const validation = require('../communityValidation');
 const { listedColours } = require('../services/listedColours');
+const { sizeStockMap } = require('../services/sizeStock');
 const defaultModels = {
   Listing: require('../models/CommunityListing'),
   Request: require('../models/OutfitRequest'),
@@ -351,7 +352,7 @@ function createCommunityController(models = defaultModels) {
         const p = byId.get(reply.productId);
         if (!p || p.businessId !== reply.businessId) return null;
         return { productId: String(p._id), businessName: p.businessName, name: p.name, price: p.price,
-          category: p.category, style: p.style, sizes: p.sizes, occasions: p.occasions, stock: p.stock,
+          category: p.category, style: p.style, sizes: p.sizes, occasions: p.occasions, stock: p.stock, sizeStock: sizeStockMap(p),
           colours: listedColours(p), material: p.material || null,
           availableColours: listedColours(p),
           imageURL: `/api/catalog/products/${p._id}/image`, reasons: [p.price <= item.budget ? 'Within your budget' : 'Above your budget'] };
