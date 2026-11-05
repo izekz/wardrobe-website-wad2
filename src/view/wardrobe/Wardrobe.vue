@@ -104,7 +104,7 @@ onMounted(load);
           >
         </div>
       </header>
-      <p v-if="route.query.purchased && items.some(item => item.itemId === route.query.purchased)" class="alert alert-success" role="status">Your purchase has been added to your wardrobe. No payment was charged.</p>
+      <p v-if="route.query.purchased && items.some(item => item.itemId === route.query.purchased)" class="alert alert-success" role="status">Your demo purchase has been added to your wardrobe. No payment was charged.</p>
       <div class="wd-filters">
         <div class="wd-chips" aria-label="Category filters">
           <button

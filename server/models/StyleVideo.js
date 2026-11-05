@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // A promotional video always belongs to an existing business product.
-// Video bytes live in MongoDB, not a third-party hosting service, for this project.
+// Video bytes live in MongoDB, not a third-party hosting service, for the class demo.
 const schema = new mongoose.Schema({
   businessId: { type: String, required: true, index: true },
   productId: { type: String, required: true, index: true },

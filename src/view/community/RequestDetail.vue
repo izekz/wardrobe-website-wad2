@@ -54,7 +54,7 @@ export default {
       try {
         await communityApi(`/requests/${this.item.requestId}/responses/${reply.responseId}/accept`, { method: 'POST', body: '{}' })
         await this.loadRequest(true)
-        this.statusNotice = 'Suggestion accepted. You can complete your checkout when ready.'
+        this.statusNotice = 'Suggestion accepted. You can complete your demo checkout when ready.'
       } catch (error) { this.statusError = error.message }
       finally { this.accepting = '' }
     },
@@ -102,7 +102,7 @@ export default {
         <div class="col-lg-7"><div class="community-panel">
           <p class="community-eyebrow">Requested by <RouterLink :to="{ name: 'community-member', params: { userId: item.consumerId } }">{{ item.consumerName }}</RouterLink></p>
           <h1>{{ item.title }}</h1><p class="community-muted mt-3">{{ item.occasion }}</p>
-          <div class="d-flex flex-wrap gap-2 my-4"><span v-if="isOwner" class="community-tag request-owner-badge">Your request</span><span class="community-tag peach">Budget {{ money(item.budget) }}</span><span class="community-tag">{{ item.preferredStyle }}</span><span class="community-tag yellow">By {{ readableDate(item.deadline) }}</span><span class="community-tag" :class="item.status === 'open' ? 'request-status-open' : 'request-status-closed'">{{ item.expired ? 'Expired' : item.status === 'open' ? 'Open' : 'Closed' }}</span><span v-if="item.fulfilled" class="community-tag request-status-open">Fulfilled · purchased</span></div>
+          <div class="d-flex flex-wrap gap-2 my-4"><span v-if="isOwner" class="community-tag request-owner-badge">Your request</span><span class="community-tag peach">Budget {{ money(item.budget) }}</span><span class="community-tag">{{ item.preferredStyle }}</span><span class="community-tag yellow">By {{ readableDate(item.deadline) }}</span><span class="community-tag" :class="item.status === 'open' ? 'request-status-open' : 'request-status-closed'">{{ item.expired ? 'Expired' : item.status === 'open' ? 'Open' : 'Closed' }}</span><span v-if="item.fulfilled" class="community-tag request-status-open">Fulfilled · demo purchase</span></div>
           <p class="community-description mb-0">{{ item.description }}</p>
 <p
   v-if="isOwner && item.status === 'closed'"
@@ -110,9 +110,9 @@ export default {
 >
   {{
     item.fulfilled
-      ? 'Purchase complete.'
+      ? 'Demo purchase complete.'
       : item.acceptedResponseId
-        ? 'Suggestion accepted. You can change your choice before completing your purchase.'
+        ? 'Suggestion accepted. You can change your choice before completing a demo purchase.'
         : item.expired
           ? 'Your request has expired. New product suggestions are closed, but businesses can send you an in-app follow-up message. You can still choose an earlier suggestion.'
           : 'Your request is closed to new business suggestions. You can still choose an available suggestion you received earlier.'
@@ -147,13 +147,13 @@ export default {
 />
           <div v-if="isOwner" class="d-flex flex-wrap align-items-center gap-3 mt-4">
             <button v-if="!item.fulfilled && !item.acceptedResponseId && (item.status === 'open' || item.deadline >= today())" class="community-btn community-btn-outline" :disabled="changing" @click="changeStatus">{{ changing ? 'Saving…' : item.status === 'open' ? 'Close request' : 'Reopen request' }}</button>
-            <RouterLink v-if="item.acceptedResponseId" :to="checkoutRoute(item.acceptedResponseId)" class="community-btn">{{ item.fulfilled ? 'View receipt' : 'Continue to checkout' }}</RouterLink>
+            <RouterLink v-if="item.acceptedResponseId" :to="checkoutRoute(item.acceptedResponseId)" class="community-btn">{{ item.fulfilled ? 'View demo receipt' : 'Continue to demo checkout' }}</RouterLink>
             <button v-if="item.acceptedResponseId && !item.fulfilled" type="button" class="community-btn community-btn-outline" :disabled="cancelling" @click="cancelAcceptance">{{ cancelling ? 'Cancelling…' : 'Cancel acceptance' }}</button>
             <button type="button" class="request-delete-btn" :disabled="deleting" @click="deleteRequest">{{ deleting ? 'Deleting…' : 'Delete request' }}</button>
           </div>
           <p v-if="statusNotice" class="alert alert-success mt-3 mb-0" role="status">{{ statusNotice }}</p><p v-if="statusError" class="community-error" role="alert">{{ statusError }}</p>
         </div></div>
-        <div class="col-lg-5"><div class="community-panel" style="background: #f0e8f6"><template v-if="isCustomer"><h2>From a request to your wardrobe</h2><p>Open a suggested item to see its photo, sizes and price. Accepting a suggestion closes your request. You can then complete your purchase to add the item to your wardrobe.</p><p class="mb-0 community-muted small">No real payment is charged.</p></template><template v-else><h2>Customer request</h2><p>Read this customer's requirements and open their profile for their other requests.</p><p class="mb-0 community-muted small">For active requests, send product suggestions through the Business Portal. For closed requests, use the in-app contact option below.</p><RouterLink v-if="item.status === 'open' && item.deadline >= today()" :to="{ name: 'business-requests', query: { request: item.requestId } }" class="community-text-button">Open in business inbox →</RouterLink></template></div></div>
+        <div class="col-lg-5"><div class="community-panel" style="background: #f0e8f6"><template v-if="isCustomer"><h2>From a request to your wardrobe</h2><p>Open a suggested item to see its photo, sizes and price. Accepting a suggestion closes your request. You can then complete a demo purchase to add the item to your wardrobe.</p><p class="mb-0 community-muted small">No real payment is charged.</p></template><template v-else><h2>Customer request</h2><p>Read this customer's requirements and open their profile for their other requests.</p><p class="mb-0 community-muted small">For active requests, send product suggestions through the Business Portal. For closed requests, use the in-app contact option below.</p><RouterLink v-if="item.status === 'open' && item.deadline >= today()" :to="{ name: 'business-requests', query: { request: item.requestId } }" class="community-text-button">Open in business inbox →</RouterLink></template></div></div>
       </div>
       <RequestContacts v-if="!isOwner" :key="item.requestId" :request-id="item.requestId" class="mt-4" />
       <div v-if="isOwner || responses.length" class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-5 mb-2"><h2 class="mb-0">Suggestions ({{ responses.length }})</h2></div>
@@ -164,7 +164,7 @@ export default {
           <ProductCard v-if="reply.product" :product="reply.product" :destination="productRoute(reply)" />
           <div v-else class="community-panel"><p class="community-eyebrow">{{ reply.businessName }}</p><h2>{{ reply.productName }}</h2><p>{{ money(reply.productPrice) }}</p><p class="community-muted mb-0">This product is no longer listed. The original suggestion is kept for reference.</p></div>
           <div class="request-suggestion-note">
-            <span v-if="item.acceptedResponseId === reply.responseId" class="community-tag request-status-open mb-2">{{ item.fulfilled ? 'Purchased' : 'Accepted' }}</span>
+            <span v-if="item.acceptedResponseId === reply.responseId" class="community-tag request-status-open mb-2">{{ item.fulfilled ? 'Purchased in demo' : 'Accepted' }}</span>
             <p class="mb-2">{{ reply.message }}</p>
             <p v-if="reply.product && reply.product.price !== reply.productPrice" class="community-muted small">Originally suggested at {{ money(reply.productPrice) }}. The card shows the current price.</p>
             <p v-if="reply.product?.stock === 0" class="community-muted small mb-1">Currently out of stock.</p>

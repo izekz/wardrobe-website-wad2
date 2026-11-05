@@ -48,11 +48,11 @@ export default {
     <template v-if="request && reply">
       <p class="community-eyebrow">Suggested for {{ isOwner ? 'your' : 'an' }} outfit request</p>
       <h2>{{ request.title }}</h2><p>Budget {{ money(request.budget) }} · {{ request.preferredStyle }}</p><p>{{ reply.message }}</p>
-      <RouterLink v-if="isOwner && request.fulfilled && request.acceptedResponseId === reply.responseId" :to="checkoutRoute" class="community-btn">View receipt</RouterLink>
-      <RouterLink v-else-if="isOwner && isAccepted" :to="checkoutRoute" class="community-btn">Continue to checkout</RouterLink>
+      <RouterLink v-if="isOwner && request.fulfilled && request.acceptedResponseId === reply.responseId" :to="checkoutRoute" class="community-btn">View demo receipt</RouterLink>
+      <RouterLink v-else-if="isOwner && isAccepted" :to="checkoutRoute" class="community-btn">Continue to demo checkout</RouterLink>
       <button v-else-if="canChoose" type="button" class="community-btn w-100" :disabled="busy" @click="accept">{{ busy ? 'Accepting…' : request.acceptedResponseId ? 'Choose this instead' : 'Accept suggestion' }}</button>
       <p v-else-if="isOwner" class="community-muted">{{ request.fulfilled ? 'You have already purchased a suggestion for this request.' : 'This request or item is no longer available for checkout.' }}</p>
-      <p v-if="canChoose" class="community-muted small mt-2">Accepting closes the request. You can complete your purchase afterward.</p>
+      <p v-if="canChoose" class="community-muted small mt-2">Accepting closes the request. You can complete a demo purchase afterward.</p>
       <RouterLink :to="{ name: 'community-request', params: { requestId: request.requestId } }" class="d-inline-block mt-2">← Back to the request</RouterLink>
     </template>
     <p v-if="error" class="community-error" role="alert">{{ error }}</p>

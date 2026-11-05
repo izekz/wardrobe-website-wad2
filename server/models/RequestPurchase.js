@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-// Simulated checkout only: no card, payment gateway or real charge.
+// Demonstration checkout only: no card, payment gateway or real charge.
 const schema = new mongoose.Schema({
   requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'OutfitRequest', required: true, unique: true },
   responseId: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestResponse', required: true },

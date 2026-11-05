@@ -60,25 +60,25 @@ export default {
 <template>
   <section class="request-checkout">
         <RouterLink :to="requestRoute" class="d-inline-block mb-4">← Back to your outfit request</RouterLink>
-    <p v-if="loading" role="status">Loading your checkout…</p>
+    <p v-if="loading" role="status">Loading your demo checkout…</p>
     <div v-else-if="error" class="community-error" role="alert">{{ error }} <button class="community-text-button" @click="load">Try again</button></div>
     <article v-else-if="purchase" class="community-panel request-checkout-receipt" aria-labelledby="purchase-complete-heading">
-      <p class="community-eyebrow">RECEIPT · NO PAYMENT CHARGED</p>
+      <p class="community-eyebrow">DEMO RECEIPT · NO PAYMENT CHARGED</p>
       <h1 id="purchase-complete-heading">Your piece is in your wardrobe</h1>
-      <p class="alert alert-success" role="status">Purchase complete. Your outfit has been added to your wardrobe.</p>
+      <p class="alert alert-success" role="status">Demo purchase complete. Your outfit has been added to your wardrobe.</p>
       <img :src="`/api/wardrobe/items/${purchase.wardrobeItemId}/image`" :alt="purchase.productName" class="request-checkout-photo mb-4" />
       <h2>{{ purchase.productName }}</h2><p>{{ purchase.businessName }}</p>
-      <dl><dt>Total</dt><dd>{{ money(purchase.price) }}</dd><dt>Size</dt><dd>{{ purchase.size }}</dd><dt>Colour</dt><dd>{{ purchase.colour }}</dd><template v-if="purchase.material && purchase.material !== 'Not specified'"><dt>Material</dt><dd>{{ purchase.material }}</dd></template></dl>
+      <dl><dt>Demo total</dt><dd>{{ money(purchase.price) }}</dd><dt>Size</dt><dd>{{ purchase.size }}</dd><dt>Colour</dt><dd>{{ purchase.colour }}</dd><template v-if="purchase.material && purchase.material !== 'Not specified'"><dt>Material</dt><dd>{{ purchase.material }}</dd></template></dl>
       <div class="d-flex flex-wrap gap-3 mt-4"><RouterLink :to="{ name: 'wardrobe', query: { purchased: purchase.wardrobeItemId } }" class="community-btn">View in my wardrobe</RouterLink><RouterLink :to="{ name: 'community-requests' }" class="community-btn community-btn-outline">View request history</RouterLink></div>
     </article>
     <template v-else-if="request && reply">
-      <p class="community-eyebrow">YOUR SELECTED SUGGESTION</p><h1>Review your purchase</h1>
+      <p class="community-eyebrow">YOUR SELECTED SUGGESTION</p><h1>Review your demo purchase</h1>
       <p class="community-muted mb-4">No real payment is charged. Confirming adds the selected item to your wardrobe and reduces available stock by one. Your request was closed when you accepted the suggestion.</p>
       <div v-if="!canPurchase" class="community-error" role="alert">This suggestion is not selected, or the request or product is no longer available. Return to your request to review your options.</div>
       <div v-if="product" class="request-checkout-layout">
-        <article class="community-panel"><img :src="product.colourImages?.[form.colour] || product.imageURL" :alt="product.name" class="request-checkout-photo mb-4" /><p class="community-eyebrow">{{ product.businessName }}</p><h2>{{ product.name }}</h2><div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span class="community-tag lilac">{{ product.category }}</span></div><p>For: {{ request.title }}</p><p>Request budget: {{ money(request.budget) }}</p><p v-if="product.price > request.budget" class="community-muted">This item is {{ money(product.price - request.budget) }} above your budget.</p><p v-if="product.price !== reply.productPrice" class="community-muted">The price has changed since the suggestion. Review the current total before confirming.</p><div class="request-checkout-total"><strong>Total</strong><strong>{{ money(product.price) }}</strong></div></article>
+        <article class="community-panel"><img :src="product.colourImages?.[form.colour] || product.imageURL" :alt="product.name" class="request-checkout-photo mb-4" /><p class="community-eyebrow">{{ product.businessName }}</p><h2>{{ product.name }}</h2><div class="d-flex flex-wrap gap-2 mb-3"><span class="community-tag pink">{{ product.style }}</span><span class="community-tag lilac">{{ product.category }}</span></div><p>For: {{ request.title }}</p><p>Request budget: {{ money(request.budget) }}</p><p v-if="product.price > request.budget" class="community-muted">This item is {{ money(product.price - request.budget) }} above your budget.</p><p v-if="product.price !== reply.productPrice" class="community-muted">The price has changed since the suggestion. Review the current total before confirming.</p><div class="request-checkout-total"><strong>Demo total</strong><strong>{{ money(product.price) }}</strong></div></article>
         <form ref="checkoutForm" class="community-panel" @submit.prevent="confirmPurchase">
-          <h2>Make it yours</h2><p>Choose your size and, if available, colour to complete the purchase.</p>
+          <h2>Make it yours</h2><p>Choose your size and, if available, colour to complete the demo purchase.</p>
           <fieldset class="border-0 p-0 m-0" :disabled="busy || !canPurchase">
             <label for="checkout-size">Size</label><select id="checkout-size" v-model="form.size" class="form-select" required><option disabled value="">Choose a size</option><option v-for="size in product.sizes" :key="size" :value="size" :disabled="sizeLeft(size) === 0">{{ size }}{{ sizeLeft(size) === 0 ? ' (sold out)' : '' }}</option></select>
             <template v-if="availableColours.length === 1">
@@ -97,7 +97,7 @@ export default {
               <p class="community-muted small">Colour not specified by the seller. You can describe it in your wardrobe later.</p>
             </template>
             <p class="community-muted small">You can edit your wardrobe details later.</p>
-            <button type="submit" class="community-btn w-100">{{ busy ? 'Completing purchase…' : 'Confirm purchase' }}</button>
+            <button type="submit" class="community-btn w-100">{{ busy ? 'Completing purchase…' : 'Confirm demo purchase' }}</button>
           </fieldset>
           <p v-if="purchaseError" class="community-error mt-3" role="alert">{{ purchaseError }} <button type="button" class="community-text-button" :disabled="busy" @click="load">Refresh checkout</button></p>
           <RouterLink v-if="!busy" :to="requestRoute" class="d-inline-block mt-3">Return to suggestions</RouterLink>

@@ -34,7 +34,7 @@ body { margin: 0; background: #fffcf8; }
 .community-account-popover > button { color: #a52c43; }
 .community-account-popover > button:disabled { opacity: .6; cursor: wait; }
 .community-avatar-small { width: 40px; height: 40px; font-size: 16px; background: #f4e6df; }
-.community-small-label { color: #947287; font-size: 11px; line-height: 1.1; width: 30px; }
+.community-demo-label { color: #947287; font-size: 11px; line-height: 1.1; width: 30px; }
 .community-main { position: relative; z-index: 1; padding-bottom: 16px; }
 .community-decoration { position: absolute; z-index: 0; inset: 75px 0 0; overflow: hidden; pointer-events: none; }
 .community-floral { display: block; }
@@ -210,7 +210,7 @@ body { margin: 0; background: #fffcf8; }
   .community-brand svg { width: 27px; }
   .community-avatar { width: 35px; height: 35px; font-size: 16px; }
   .community-account { gap: 6px; }
-  .community-small-label { font-size: 9px; width: 24px; }
+  .community-demo-label { font-size: 9px; width: 24px; }
   .community-nav { font-size: 11px; gap: 19px; min-height: 45px; }
   .community-nav > span, .community-nav > a { padding-inline: 0; }
   .community-edge-flower { width: 125px; left: -92px; }
