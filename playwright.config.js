@@ -15,9 +15,9 @@ import os from 'node:os';
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './Tests',
-  // This contributor's E2E tests require their dedicated disposable local app.
-  testIgnore: '**/wardrobe-outfit-planner/**',
+  testDir: './tests',
+  // Each feature's tests use its own configuration and isolated local test app.
+  testIgnore: ['**/wardrobe-outfit-planner/**', '**/business/**'],
   outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
   /* Run tests in files in parallel */
   fullyParallel: true,
