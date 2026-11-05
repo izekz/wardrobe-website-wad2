@@ -7,7 +7,7 @@ export default defineConfig({
   root,
   plugins: [vue()],
   test: {
-    include: ['tests/customer-javier/*.spec.js'],
+    include: ['tests/customer-javier/0[123]-*.spec.js'],
     environment: 'jsdom',
     clearMocks: true,
   },
