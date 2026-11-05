@@ -17,7 +17,7 @@ describe('Component — My Outfit Requests card', () => {
     }
     const wrapper = mount(RequestCard, {
       props: { request, personal: true },
-      global: { stubs: { RouterLink: true, CommunityIcon: true, ReportDialog: true } },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, CommunityIcon: true, ReportDialog: true } },
     })
     expect(wrapper.text()).toContain('Classic presentation jacket')
     expect(wrapper.text()).toContain('Closed')

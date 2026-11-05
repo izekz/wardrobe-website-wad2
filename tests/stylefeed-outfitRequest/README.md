@@ -1,53 +1,148 @@
-# Style Feed & Outfit Request tests (IS216)
+# Style Feed and Outfit Request Tests
 
-Located beside `tests/business`. These test only Style Feed and Outfit Request workflows; they do not modify or test the teammates’ business listing, general Store checkout, or wardrobe functionality.
+This guide covers **one unit test, two component tests and two end-to-end (E2E) tests** for Style Feed and Outfit Requests. These are the tests for the `tests/stylefeed-outfitRequest` folder.
 
-## Test inventory: exactly five
+Run the following commands from the main **`wardrobe-website-wad2`** folder unless stated otherwise. These tests are independent of your teammate's `tests/business` tests.
 
-| Type | File | Verifies |
-| --- | --- | --- |
-| Unit (1) | `unit/readVideo.spec.js` | Accepted video type/size and rejected invalid files |
-| Component (1) | `component/RequestCard.spec.js` | The customer's request history card and Delete event |
-| Component (2) | `component/RequestSuggestionAction.spec.js` | Accepting a suggestion without duplicate variant selections |
-| E2E (1) | `e2e/outfit-request.spec.js` | Customer posts, views and deletes a request |
-| E2E (2) | `e2e/style-feed-boost.spec.js` | Business uploads/boosts video; customer sees Sponsored video |
+## Test coverage
 
-## Screenshot 1 — Unit + component tests
+| No. | Type | File | Behaviour tested |
+| --- | --- | --- | --- |
+| 1 | Unit | `tests/stylefeed-outfitRequest/unit/readVideo.spec.js` | A video upload with an unsupported file type or size over 8 MB is rejected, while a small MP4 is accepted. |
+| 2 | Component | `tests/stylefeed-outfitRequest/component/RequestCard.spec.js` | Alex's closed Outfit Request displays the request title, status and two suggestions; its Delete button emits the correct event. |
+| 3 | Component | `tests/stylefeed-outfitRequest/component/RequestSuggestionAction.spec.js` | Alex accepts the matching suggested product without selecting size or colour at the acceptance step; the correct API call and redirect occur. |
+| 4 | E2E | `tests/stylefeed-outfitRequest/e2e/outfit-request.spec.js` | Alex registers, logs in, posts a jacket request, sees it after revisiting the request page and deletes it. |
+| 5 | E2E | `tests/stylefeed-outfitRequest/e2e/style-feed-boost.spec.js` | A business registers, creates a product fixture, uploads a video, spends demo coins boosting it, and a customer sees a Sponsored post. |
 
-From the project root (where `package.json` is located):
+The component tests mock child components and/or network calls. The E2E tests use a real Chromium browser, the Express backend and a **temporary local MongoDB replica set**; they do not call your team's live MongoDB Atlas database.
 
-```bash
+## 1. Install dependencies
+
+Prerequisites: Node.js and pnpm; internet access on the first E2E run to download the temporary MongoDB binary if not already cached.
+
+Install frontend and test dependencies:
+
+```sh
 pnpm install
-(cd server && pnpm install)
+```
+
+Install backend dependencies:
+
+```sh
+cd server
+pnpm install
+cd ..
+```
+
+Install Playwright Chromium:
+
+```sh
+pnpm exec playwright install chromium
+```
+
+**You do not need to install `mongod` with Homebrew for these tests.** The E2E setup starts its own isolated replica set using the project's `mongodb-memory-server` dependency. The first startup may take longer because it downloads the MongoDB executable.
+
+## 2. Run the unit test
+
+The unit test does not require the application server, browser or database.
+
+```sh
+pnpm exec vitest run --config tests/stylefeed-outfitRequest/vitest.config.js tests/stylefeed-outfitRequest/unit/readVideo.spec.js
+```
+
+Expected if successful: **1 passed**.
+
+## 3. Run the two component tests
+
+These tests mount Vue components in jsdom; they do not need a running backend.
+
+Outfit Request card:
+
+```sh
+pnpm exec vitest run --config tests/stylefeed-outfitRequest/vitest.config.js tests/stylefeed-outfitRequest/component/RequestCard.spec.js
+```
+
+Accept suggestion:
+
+```sh
+pnpm exec vitest run --config tests/stylefeed-outfitRequest/vitest.config.js tests/stylefeed-outfitRequest/component/RequestSuggestionAction.spec.js
+```
+
+Expected if successful: **1 passed** for each file.
+
+To run all three unit/component tests together:
+
+```sh
 pnpm test:stylefeed-outfitRequest
 ```
 
-After **3 tests pass**, take a screenshot of the Terminal including the test filenames and the `Tests 3 passed` summary. On a Mac, press **Command + Shift + 4** and select the Terminal area. Only screenshot a successful run, not this README.
+Expected if successful: **3 test files passed, 3 tests passed**.
 
-## Screenshot 2 — End-to-end tests
+## 4. Run the E2E tests
 
-The E2E suite uses a dedicated local MongoDB instance (single-node replica set, because video boosts use transactions) and Playwright Chromium, not your team’s Atlas database. You must have `mongod` installed and on your PATH; do not point these tests at your team’s database.
+Playwright automatically starts three services on separate ports, so **do not run `pnpm dev` or `server/pnpm dev` for these tests**:
 
-```bash
-pnpm exec playwright install chromium
+| Service | Test-only address |
+| --- | --- |
+| Temporary replica-set MongoDB | `127.0.0.1:27129` (readiness check: `27128`) |
+| Express backend | `http://127.0.0.1:3299` |
+| Vite frontend | `http://127.0.0.1:5299` |
+
+The test database is disposable and isolated from `server/.env` and your team's Atlas database. Boosting uses a MongoDB transaction, which is why the temporary database runs as a single-node replica set.
+
+Run the Outfit Request E2E test:
+
+```sh
+pnpm exec playwright test --config tests/stylefeed-outfitRequest/e2e/playwright.config.js outfit-request.spec.js
+```
+
+Run the Style Feed E2E test:
+
+```sh
+pnpm exec playwright test --config tests/stylefeed-outfitRequest/e2e/playwright.config.js style-feed-boost.spec.js
+```
+
+Run both together:
+
+```sh
 pnpm test:stylefeed-outfitRequest:e2e
 ```
 
-After **2 tests pass**, screenshot the Terminal with the two passing E2E test names. For an HTML report, use:
+Expected if successful: **2 passed** in Chromium. Unlike your teammate's 3-browser Playwright setup, these tests are configured for **Chromium only**, so two cases should yield two executions.
 
-```bash
+**If the first run downloads the MongoDB executable, allow it to finish; do not interrupt it.** Later runs can reuse the cached executable.
+
+## 5. View E2E results
+
+After running both E2E cases, open the HTML report:
+
+```sh
 pnpm exec playwright show-report playwright-report-stylefeed-outfitRequest
 ```
 
-Use the report as extra evidence if required. The separate E2E processes use ports `27128`/`27129` for the test MongoDB, `3299` for the backend and `5299` for Vite, so they will not use your regular 3000/5173 development ports.
+This opens a report showing the individual cases and their actual Pass/Fail outcomes. The report only reflects your most recent execution.
+
+## 6. Screenshots for the submission
+
+Following the same format as Kathleen's testing guide, provide evidence for **each of the five cases**:
+
+1. The test name, a one-sentence input/action and the expected behaviour.
+2. A screenshot of the test code (show the `test`/`it` name and important assertions).
+3. A screenshot of the **actual passing** Terminal summary (Vitest) or Playwright report (E2E).
+
+For clear evidence, capture a **Vitest Terminal screenshot** with all three case names and `Tests 3 passed`, then a **Playwright report screenshot** showing the two passing E2E cases. You may reuse those two results screenshots alongside the five code screenshots in your submission PDF.
+
+On macOS, press **Command + Shift + 4**, then drag over the Terminal or report. Do not crop away the test names or final result. Never include `.env` credentials or passwords in screenshots.
 
 ## Troubleshooting
 
-- Run the commands from the **project root**, not from `tests/stylefeed-outfitRequest`.
-- If `pnpm` is not installed, install/enable it first, then run `pnpm install`.
-- If the E2E runner says `mongod` cannot be found, install MongoDB Community Server and make the executable available on PATH.
-- If Chromium is missing, rerun `pnpm exec playwright install chromium`.
-- If a port is already in use, stop the previous E2E process before retrying.
-- If a test fails, inspect the error and HTML report; do not screenshot a passing summary unless the tests actually pass.
-- This folder’s **case-sensitive name** is `stylefeed-outfitRequest` (capital `R`). Do not rename it without updating the two scripts in the root `package.json` and the E2E paths.
-- These tests are separate from your groupmate’s `pnpm test:business` and `pnpm test:business:e2e` commands.
+- **`RequestCard.spec.js` expected a title but got only `Classic...`:** The old test replaced Vue `RouterLink` with an empty stub, hiding link text. This update provides a link stub that renders its slot, preserving the request title and suggestion count.
+- **`spawn mongod ENOENT`:** This was caused by the previous E2E launcher expecting a system-wide MongoDB installation. This version uses `mongodb-memory-server`; run `pnpm install` and retry.
+- **MongoDB binary download fails:** Check internet access and re-run. A proxy/firewall may block the first download; inspect the specific error rather than directing the test at the live team database.
+- **Port already in use (`27128`, `27129`, `3299`, or `5299`):** Stop an earlier test run occupying the port, then retry.
+- **Playwright Chromium missing:** Run `pnpm exec playwright install chromium`.
+- **No tests found:** Run commands from the project root and preserve the exact folder name `stylefeed-outfitRequest` (capital `R`).
+- **Browser test fails after startup:** Open the generated Playwright report and trace. The database/startup fix does not guarantee UI selectors are correct after subsequent team changes.
+- **A test fails:** Include actual results only after it really passes; don't invent a screenshot or mark it passed without running it.
+
+The E2E tests are intended for test accounts created in the temporary database; the test-only product fixture is required to publish a video, but does **not** test your teammate's business listing UI.

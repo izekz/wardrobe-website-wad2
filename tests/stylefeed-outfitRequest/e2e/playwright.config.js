@@ -13,7 +13,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5299', ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
   webServer: [
     { command: 'node tests/stylefeed-outfitRequest/e2e/start-test-database.mjs', cwd: '../../..',
-      url: 'http://127.0.0.1:27128', timeout: 60_000, reuseExistingServer: false },
+      url: 'http://127.0.0.1:27128', timeout: 180_000, reuseExistingServer: false },
     { command: 'node server.js', cwd: '../../../server', port: 3299, timeout: 60_000, reuseExistingServer: false,
       env: { PORT: '3299', DB: mongoUrl, MONGODB_URI: mongoUrl,
         CLIENT_ORIGIN: 'http://127.0.0.1:5299', NODE_ENV: 'test' } },
