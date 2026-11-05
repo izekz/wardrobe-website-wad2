@@ -81,7 +81,7 @@ export default {
           <label for="sf-product">Link a product from your store</label>
           <select id="sf-product" v-model="productId" required><option value="" disabled>Choose a product</option><option v-for="product in availableProducts" :key="product.productId" :value="product.productId">{{ product.name }} · {{ money(product.price) }}</option></select>
           <p v-if="!availableProducts.length" class="biz-muted">Add a visible product first. <RouterLink :to="{ name: 'business-product-new' }">Create a product</RouterLink></p>
-          <label for="sf-caption">Caption</label><textarea id="sf-caption" v-model="caption" maxlength="200" required rows="3" placeholder="A fresh fit for your next campus day ✨" /><span class="sf-form-hint">{{ caption.length }}/200 characters</span>
+          <label for="sf-caption">Caption</label><textarea id="sf-caption" v-model="caption" maxlength="200" required rows="3" placeholder="A fresh fit for your next day out ✨" /><span class="sf-form-hint">{{ caption.length }}/200 characters</span>
           <label for="sf-file">Short video</label><input id="sf-file" ref="uploadInput" type="file" accept="video/mp4,video/webm" required @change="chooseFile" />
           <small class="biz-muted">MP4 or WebM, maximum 8 MB. Recording a short phone video and compressing it first works best.</small>
           <video v-if="videoPreview" class="sf-upload-preview" :src="videoPreview" controls playsinline muted />
