@@ -154,3 +154,7 @@ vite.config.ts.timestamp-*
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Business E2E test output
+playwright-report-business/
+test-results-business/
