@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BusinessDashboard from '../BusinessDashboard.vue'
+import BusinessDashboard from '../../../src/components/BusinessDashboard.vue'
 
 // BusinessDashboard draws the "Why shoppers skipped" bars on the business Overview page.
 describe('Component test: BusinessDashboard', () => {

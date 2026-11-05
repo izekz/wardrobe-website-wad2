@@ -1,5 +1,5 @@
 import { mergeConfig } from 'vite'
-import baseConfig from '../vite.config.js'
+import baseConfig from '../../../vite.config.js'
 
 // The same app on its own ports, so the tests can run beside a normal `pnpm dev`.
 export default mergeConfig(baseConfig, {

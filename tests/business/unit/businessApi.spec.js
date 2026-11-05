@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bestProduct } from '../businessApi'
+import { bestProduct } from '../../../src/services/businessApi'
 
 // bestProduct() chooses which product a business suggests first for a customer request.
 const request = { title: 'Need a jacket', description: 'For my presentation', preferredStyle: 'Minimalist', budget: 50 }

@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:business": "vitest run",
-    "test:business:e2e": "playwright test --config e2e-business/playwright.config.js",
+    "test:business:e2e": "playwright test --config tests/business/e2e/playwright.config.js",
     "qa": "node qa/check-project.mjs && node --test server/tests/*.test.cjs server/tests/*.test.js"
   },
   "dependencies": {
