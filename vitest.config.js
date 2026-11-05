@@ -8,8 +8,8 @@ export default defineConfig({
     include: [
       'tests/business/unit/**/*.spec.js',
       'tests/business/component/**/*.spec.js',
-      'tests/kathleen/unit/**/*.spec.js',
-      'tests/kathleen/component/**/*.spec.js',
+      'tests/profile-admin/unit/**/*.spec.js',
+      'tests/profile-admin/component/**/*.spec.js',
       'src/**/*.spec.js',
     ],
   },

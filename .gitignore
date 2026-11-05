@@ -158,3 +158,7 @@ vite.config.ts.timestamp-*
 # Business E2E test output
 playwright-report-business/
 test-results-business/
+
+# Profile/admin E2E reports and artifacts
+/playwright-report-profile-admin/
+/test-results-profile-admin/

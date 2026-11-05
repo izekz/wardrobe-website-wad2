@@ -14,7 +14,9 @@
     "test:business": "vitest run",
     "test:business:e2e": "playwright test --config tests/business/e2e/playwright.config.js",
     "test:stylefeed-outfitRequest": "vitest run --config tests/stylefeed-outfitRequest/vitest.config.js",
-    "test:stylefeed-outfitRequest:e2e": "playwright test --config tests/stylefeed-outfitRequest/e2e/playwright.config.js"
+    "test:stylefeed-outfitRequest:e2e": "playwright test --config tests/stylefeed-outfitRequest/e2e/playwright.config.js",
+    "test:profile-admin:unit-components": "vitest run tests/profile-admin/unit tests/profile-admin/component",
+    "test:profile-admin:e2e": "playwright test --config tests/profile-admin/e2e/playwright.config.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

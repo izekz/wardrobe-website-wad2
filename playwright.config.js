@@ -21,8 +21,7 @@ testIgnore: [
   '**/business/**',
   '**/customer-javier/**',
   '**/stylefeed-outfitRequest/**',
-  '**/profile-admin/unit/**',
-  '**/profile-admin/component/**',
+  '**/profile-admin/**',
 ],
 outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
   /* Run tests in files in parallel */
@@ -89,4 +88,3 @@ outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
   //   reuseExistingServer: !process.env.CI,
   // },
 });
-

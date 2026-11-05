@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { adminAccount } from './fixtures.js';
 
 test('E2E2: admin logs out through the account menu', async ({ page }) => {
-  await page.goto('http://127.0.0.1:5173/login');
+  await page.goto('/login');
 
   await page.getByRole('textbox', { name: 'Email address' })
-    .fill('admin@gmail.com');
+    .fill(adminAccount.email);
 
   await page.getByRole('textbox', { name: 'Password' })
-    .fill('admin1234567');
+    .fill(adminAccount.password);
 
   await page.getByRole('textbox', { name: 'Password' })
     .press('Enter');
@@ -31,4 +32,5 @@ test('E2E2: admin logs out through the account menu', async ({ page }) => {
       exact: true,
     })
   ).toBeVisible();
+
 });
