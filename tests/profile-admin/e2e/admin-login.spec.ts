@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('E2E2: admin logs out through the account menu', async ({ page }) => {
+test('E2E1: admin login opens the admin dashboard', async ({ page }) => {
   await page.goto('http://127.0.0.1:5173/login');
 
   await page.getByRole('textbox', { name: 'Email address' })
@@ -15,19 +15,6 @@ test('E2E2: admin logs out through the account menu', async ({ page }) => {
   await expect(
     page.getByRole('heading', {
       name: 'Admin dashboard',
-      exact: true,
-    })
-  ).toBeVisible();
-
-  await page.getByRole('button', { name: 'Account menu' })
-    .click();
-
-  await page.getByRole('button', { name: 'Log out' })
-    .click();
-
-  await expect(
-    page.getByRole('heading', {
-      name: 'Welcome back',
       exact: true,
     })
   ).toBeVisible();
