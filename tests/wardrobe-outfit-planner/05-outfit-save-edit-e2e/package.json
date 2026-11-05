@@ -1,0 +1,8 @@
+{
+  "name": "wop-e02",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "pnpm --dir ../../.. build && playwright test --config playwright.config.js"
+  }
+}
