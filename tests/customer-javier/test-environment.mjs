@@ -1,5 +1,3 @@
-// Local test environment for Javier's customer E2E tests.
-// Based on the group's isolated Business/Wardrobe E2E approach.
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
@@ -18,7 +16,7 @@ const host = '127.0.0.1'
 const frontendPort = 5387
 const backendPort = 3387
 const origin = `http://${host}:${frontendPort}`
-const password = 'Local-customer-fixture-2026' // Not a real account password
+const password = 'Local-customer-fixture-2026'
 let db
 const children = []
 let stopping = false
@@ -29,7 +27,6 @@ async function stop() {
   for (const child of children) {
     if (child.exitCode === null && !child.killed) child.kill('SIGTERM')
   }
-  // Allow a moment for backend connections to close before stopping MongoDB.
   await Promise.all(children.map(child => new Promise(resolve => {
     if (child.exitCode !== null) return resolve()
     child.once('exit', resolve)
@@ -78,7 +75,6 @@ async function setup() {
     photo, status: 'active' })
   await mongoose.disconnect()
 
-  // Run the project's REAL Express server and Vue/Vite frontend against only the temporary database.
   start(process.execPath, ['server.js'], join(projectRoot, 'server'), {
     PORT: String(backendPort), MONGODB_URI: uri, DB: uri,
     CLIENT_ORIGIN: origin, NODE_ENV: 'test',

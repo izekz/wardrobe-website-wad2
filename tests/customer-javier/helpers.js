@@ -3,7 +3,6 @@ import { expect } from '@playwright/test'
 const email = 'customer.fixture@example.invalid'
 const password = 'Local-customer-fixture-2026'
 
-// Login creates a session so tests can focus on customer features, not authentication.
 export async function signIn(page) {
   await page.goto('/login')
   const response = await page.request.post('/api/auth/login', {

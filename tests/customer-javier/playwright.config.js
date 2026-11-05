@@ -1,6 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// Like Business tests, this configuration starts an independent site and DB.
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.e2e.spec.js',
