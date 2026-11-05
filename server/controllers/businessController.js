@@ -249,7 +249,7 @@ function createBusinessController(models = defaultModels) {
     });
   }
 
-  // Simulated payment for the demo: no card details, the wallet is simply topped up.
+  // Simulated payment: no card details, the wallet is simply topped up.
   async function purchaseCoins(req, res) {
     const business = await myBusiness(req);
     const amount = req.body?.coins;

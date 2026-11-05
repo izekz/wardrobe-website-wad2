@@ -147,7 +147,7 @@ function createCommunityController(models = defaultModels) {
     const id = cleanQuery(req.params.id, 100);
     let user = idIsValid(id) ? await User.findById(id).select('name role suspended') : null;
     if (user?.suspended) return res.status(404).json({ message: 'Member not found.' });
-    // Older demo posts keep their original owner. Never assign them to whoever logs in.
+    // Older posts keep their original owner. Never assign them to whoever logs in.
     if (!user) {
       const [listing, request] = await Promise.all([Listing.findOne({ ownerId: id }), Request.findOne({ consumerId: id, deletedAt: null })]);
       if (!listing && !request) return res.status(404).json({ message: 'Member not found.' });

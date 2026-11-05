@@ -2,7 +2,7 @@
 import { businessApi, money, shortDate } from '../../services/businessApi'
 import { refreshBusiness } from '../../services/businessStore'
 import BusinessIcon from '../../components/BusinessIcon.vue'
-// Demo prices for the simulated coin purchase. No real payment happens.
+// Prices for the simulated coin purchase. No real payment happens.
 const PRICES = { 100: 4.99, 250: 10.99, 500: 19.99 }
 const LABELS = { starting: 'Welcome coins', purchase: 'Bought coins', boost: 'Boost', premium: 'Premium placement', 'extra-listing': 'Extra listing' }
 export default {
@@ -68,7 +68,7 @@ export default {
       </section>
 
       <section class="biz-section">
-        <div class="biz-card-head mb-3"><h2 class="mb-0" style="font-size:1.7rem">Top up coins</h2><span class="biz-muted small">Demo only: payment is simulated.</span></div>
+        <div class="biz-card-head mb-3"><h2 class="mb-0" style="font-size:1.7rem">Top up coins</h2><span class="biz-muted small">No real payment is taken.</span></div>
         <div class="biz-packages">
           <button v-for="coins in wallet.packages" :key="coins" type="button" class="biz-package" :disabled="busy !== ''" @click="buy(coins)">
             <BusinessIcon name="coins" :size="28" /><strong>{{ coins }} coins</strong><span>{{ money(price(coins)) }}</span><em>{{ busy === `buy-${coins}` ? 'Adding…' : 'Buy' }}</em>

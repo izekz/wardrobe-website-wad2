@@ -42,7 +42,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
   }
   async function accept(req, res) {
     const request = await ownRequest(req);
-    if (request.purchaseId) throw fail(409, 'This request already has a completed demo purchase.');
+    if (request.purchaseId) throw fail(409, 'This request already has a completed purchase.');
     const switching = request.status === 'closed' && !!request.acceptedResponseId;
     // The needed-by date ends NEW business replies, not previously offered items.
     // Otherwise cancelling acceptance after the deadline traps customers: their
@@ -61,11 +61,11 @@ function createRequestCommerceController(models, transact = work => mongoose.con
       $set: { status: 'closed', expiredAt: null, acceptedResponseId: req.params.responseId, acceptedAt: new Date() },
     }, { returnDocument: 'after', runValidators: true });
     if (!updated) throw fail(409, 'The request changed. Refresh and try again.');
-    res.json({ acceptedResponseId: String(updated.acceptedResponseId), message: 'Suggestion accepted. Your request is now closed. You can still complete the optional demo purchase.' });
+    res.json({ acceptedResponseId: String(updated.acceptedResponseId), message: 'Suggestion accepted. Your request is now closed. You can still complete the optional purchase.' });
   }
   async function cancelAcceptance(req, res) {
     const request = await ownRequest(req);
-    if (request.purchaseId) throw fail(409, 'The demo purchase is already complete.');
+    if (request.purchaseId) throw fail(409, 'The purchase is already complete.');
     if (!request.acceptedResponseId) throw fail(409, 'No accepted suggestion to cancel.');
     const expired = request.deadline < singaporeToday();
     const updated = await Request.findOneAndUpdate({ ...ids(req), status: 'closed', deletedAt: null,
@@ -92,7 +92,7 @@ function createRequestCommerceController(models, transact = work => mongoose.con
         return { purchase: receipt(previous), alreadyPurchased: true };
       }
       if (request.status !== 'closed' || !request.acceptedAt || String(request.acceptedResponseId) !== req.params.responseId) {
-        throw fail(409, 'Accept this suggestion before completing your demo purchase.');
+        throw fail(409, 'Accept this suggestion before completing your purchase.');
       }
       const { product, response } = await suggestedProduct(req, session);
       const size = wardrobeValidation.text(req.body?.size, 'Size', 20);
