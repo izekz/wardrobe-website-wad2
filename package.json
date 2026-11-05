@@ -12,7 +12,9 @@
     "test:wardrobe:e2e": "pnpm build && playwright test --config tests/wardrobe-outfit-planner/playwright.config.js",
     "test:wardrobe": "pnpm test:wardrobe:unit-components && pnpm test:wardrobe:e2e",
     "test:business": "vitest run",
-    "test:business:e2e": "playwright test --config tests/business/e2e/playwright.config.js"
+    "test:business:e2e": "playwright test --config tests/business/e2e/playwright.config.js",
+    "test:stylefeed-outfitRequest": "vitest run --config tests/stylefeed-outfitRequest/vitest.config.js",
+    "test:stylefeed-outfitRequest:e2e": "playwright test --config tests/stylefeed-outfitRequest/e2e/playwright.config.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

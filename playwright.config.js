@@ -17,7 +17,7 @@ import os from 'node:os';
 export default defineConfig({
   testDir: './tests',
   // Each feature's tests use its own configuration and isolated local test app.
-  testIgnore: ['**/wardrobe-outfit-planner/**', '**/business/**'],
+  testIgnore: ['**/wardrobe-outfit-planner/**', '**/business/**', '**/stylefeed-outfitRequest/**'],
   outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
   /* Run tests in files in parallel */
   fullyParallel: true,
