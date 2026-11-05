@@ -16,9 +16,14 @@ import os from 'node:os';
  */
 export default defineConfig({
   testDir: './tests',
-  // Each feature's tests use its own configuration and isolated local test app.
-  testIgnore: ['**/wardrobe-outfit-planner/**', '**/business/**'],
-  outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
+testIgnore: [
+  '**/wardrobe-outfit-planner/**',
+  '**/business/**',
+  '**/stylefeed-outfitRequest/**',
+  '**/profile-admin/unit/**',
+  '**/profile-admin/component/**',
+],
+outputDir: path.join(os.tmpdir(), 'dripped-other-playwright'),
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
