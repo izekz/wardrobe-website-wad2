@@ -4,6 +4,7 @@ import { catalogApi, money, occasions } from '../../services/catalogApi'
 import { categories, styles } from '../../services/businessApi'
 import { authState } from '../../services/authService'
 import ProductCard from '../../components/ProductCard.vue'
+import { surveyFilterOptions } from '../../services/discoverFilterOptions.js'
 import CommunityIcon from '../../components/CommunityIcon.vue'
 import CommunityFloral from '../../components/CommunityFloral.vue'
 const blankFilters = () => ({ search: '', style: '', category: '', occasion: '', size: '', maxPrice: '' })
@@ -18,13 +19,9 @@ export default {
     hasFilters() { return Object.values(this.filters).some(value => value !== '') },
     pageCount() { return Math.ceil(this.total / this.pageSize) },
     personal() { return this.mode === 'forYou' && this.preferences },
-    styleOptions() { return this.personal ? (this.preferences?.preferredStyles || []) : this.styles },
-    occasionOptions() { return this.personal ? (this.preferences?.activities || []) : this.occasions },
-    priceOptions() {
-      if (!this.personal || !this.preferences?.budget) return [20,40,60,100]
-      const budget = Number(this.preferences.budget)
-      return [...new Set([20,40,60,100,budget].filter(amount => amount <= budget))].sort((a,b)=>a-b)
-    },
+    styleOptions() { return surveyFilterOptions(this.preferences, this.mode, this.styles, this.occasions).styles },
+    occasionOptions() { return surveyFilterOptions(this.preferences, this.mode, this.styles, this.occasions).occasions },
+    priceOptions() { return surveyFilterOptions(this.preferences, this.mode, this.styles, this.occasions).prices },
     // Person 4: shoes only use US number sizes.
     sizeOptions() { return this.filters.category === 'Shoes' ? ['5','6','7','8','9','10','11','12','13'] : ['XS','S','M','L','XL','One size'] },
     storefront() { return this.$route.query.businessId ? String(this.$route.query.businessName || 'this business') : '' },
