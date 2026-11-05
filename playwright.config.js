@@ -19,6 +19,7 @@ export default defineConfig({
 testIgnore: [
   '**/wardrobe-outfit-planner/**',
   '**/business/**',
+  '**/customer-javier/**',
   '**/stylefeed-outfitRequest/**',
   '**/profile-admin/unit/**',
   '**/profile-admin/component/**',
