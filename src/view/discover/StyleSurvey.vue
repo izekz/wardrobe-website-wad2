@@ -17,7 +17,7 @@ const styleOptions=[
  {name:'Streetwear',desc:'Relaxed shapes, sneakers, graphic layers',image:streetwearImg},
  {name:'Vintage',desc:'Retro details, nostalgic prints, timeless finds',image:vintageImg},
  {name:'Y2K',desc:'Playful 2000s shapes, denim, fitted silhouettes',image:y2kImg},
- {name:'Preppy',desc:'Polished campus classics, knits and skirts',image:preppyImg},
+ {name:'Preppy',desc:'Polished classics, knits and skirts',image:preppyImg},
  {name:'Classic',desc:'Tailored, refined and easy to dress up',image:classicImg},
  {name:'Romantic',desc:'Soft colours, feminine details and flowy shapes',image:romanticImg}
 ]

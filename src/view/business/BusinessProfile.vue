@@ -49,7 +49,7 @@ export default {
 </script>
 <template>
   <section aria-labelledby="biz-profile-heading">
-    <div class="biz-page-head"><div><h1 id="biz-profile-heading">{{ isNew ? 'Set up your business' : 'Your business profile' }}</h1><p>{{ isNew ? 'Tell students who you are. New businesses get 100 free coins.' : 'Keep your store details and styles up to date.' }}</p></div></div>
+    <div class="biz-page-head"><div><h1 id="biz-profile-heading">{{ isNew ? 'Set up your business' : 'Your business profile' }}</h1><p>{{ isNew ? 'Tell customers who you are. New businesses get 100 free coins.' : 'Keep your store details and styles up to date.' }}</p></div></div>
     <p v-if="loading" role="status" class="biz-loading">Loading your profile…</p>
     <form v-else ref="form" @submit.prevent="save" :aria-busy="saving">
       <fieldset :disabled="saving" class="border-0 p-0 m-0">
@@ -86,7 +86,7 @@ export default {
           </div>
           <div class="col-xl-4">
             <aside class="biz-side-panel">
-              <h2>Reach the right students</h2>
+              <h2>Reach the right customers</h2>
               <p>Your styles decide which shoppers see your products first and which outfit requests are suggested to you.</p>
               <CommunityFloral style="width:120px;display:block;margin:10px auto 0" aria-hidden="true" />
             </aside>

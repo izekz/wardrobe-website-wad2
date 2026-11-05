@@ -43,7 +43,7 @@ export default {
 <template>
   <section aria-labelledby="biz-promo-heading">
     <div class="biz-page-head">
-      <div><h1 id="biz-promo-heading">Get seen by the right shoppers</h1><p>Use coins to boost products and reach more students.</p></div>
+      <div><h1 id="biz-promo-heading">Get seen by the right shoppers</h1><p>Use coins to boost products and reach more customers.</p></div>
       <div v-if="wallet" class="biz-stat yellow" style="padding:14px 22px"><span class="biz-stat-icon" style="width:50px;height:50px"><BusinessIcon name="coins" :size="24" /></span><div><span>Available coins</span><strong>{{ wallet.coins }}</strong></div></div>
     </div>
     <p v-if="loading && !wallet" role="status" class="biz-loading">Loading your wallet…</p>
